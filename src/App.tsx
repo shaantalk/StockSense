@@ -10,6 +10,7 @@ import Checkout from './components/Checkout';
 import Login from './components/Login';
 import Onboarding from './components/Onboarding';
 import { googleApiService } from './services/googleApiService';
+import { runInitJobs } from './services/initService';
 import type { UserConfig, Shop, Member, Status } from './types';
 
 function App() {
@@ -40,6 +41,9 @@ function App() {
 
       // 2. Get User Info
       const user = await googleApiService.getUserInfo();
+
+      // Fire off background init jobs now that user is authenticated
+      runInitJobs();
 
       let activeHouseholdId = localStorage.getItem('activeHouseholdId');
       if (activeHouseholdId && !households.find(h => h.id === activeHouseholdId)) {

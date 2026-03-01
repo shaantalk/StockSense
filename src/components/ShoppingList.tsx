@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { googleApiService } from '../services/googleApiService';
 import type { ShoppingListItem, UserConfig, ShopEvent, PurchasedItem } from '../types';
 import { clsx, type ClassValue } from 'clsx';
+import { getCurrencySymbol } from '../utils/currency';
 import { twMerge } from 'tailwind-merge';
 
 function cn(...inputs: ClassValue[]) {
@@ -258,7 +259,7 @@ const ShoppingList = ({ config }: ShoppingListProps) => {
                                 <div>
                                     <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-3 block">Total Bill Amount</label>
                                     <div className="relative group">
-                                        <span className="absolute left-5 top-1/2 -translate-y-1/2 font-black text-slate-500 text-xl group-focus-within:text-primary-400">{config?.currency || '₹'}</span>
+                                        <span className="absolute left-5 top-1/2 -translate-y-1/2 font-black text-slate-500 text-xl group-focus-within:text-primary-400">{getCurrencySymbol(config?.currency || 'INR')}</span>
                                         <input
                                             type="number"
                                             value={totalAmount}

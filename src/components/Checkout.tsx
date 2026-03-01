@@ -3,6 +3,7 @@ import { Calendar, Store, User, ArrowUpRight, History, Package, Loader2 } from '
 import { motion, AnimatePresence } from 'framer-motion';
 import { googleApiService } from '../services/googleApiService';
 import type { ShopEvent, UserConfig } from '../types';
+import { getCurrencySymbol } from '../utils/currency';
 
 interface CheckoutProps {
     config: UserConfig | null;
@@ -66,7 +67,7 @@ const Checkout = ({ config }: CheckoutProps) => {
                                         </div>
                                     </div>
                                     <div className="text-right">
-                                        <div className="text-2xl font-black text-white tracking-tighter">{config?.currency || '₹'}{event.totalAmount}</div>
+                                        <div className="text-2xl font-black text-white tracking-tighter">{getCurrencySymbol(config?.currency || 'INR')}{event.totalAmount}</div>
                                         <div className="flex items-center justify-end gap-1 text-[10px] text-slate-500 font-black uppercase tracking-wider mt-1">
                                             <User size={10} className="text-slate-600" />
                                             {event.buyer}

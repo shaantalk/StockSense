@@ -1,14 +1,44 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { DollarSign, Loader2, CheckCircle2 } from 'lucide-react';
+import { DollarSign, Loader2, CheckCircle2, Search, ChevronDown } from 'lucide-react';
 import { SettingItem } from '../SettingItem';
 import { googleApiService } from '../../../services/googleApiService';
 import type { SharedSettingsProps } from '../types';
+import { getCurrencySymbol, getCurrencyName } from '../../../utils/currency';
+import { fetchAndCacheCurrencies } from '../../../services/initService';
+
+export interface CurrencyData {
+    code: string;
+    name: string;
+    symbol: string;
+    countryName: string;
+    flag: string;
+}
 
 export const CurrencyManager = ({ config }: Pick<SharedSettingsProps, 'config'>) => {
     const [showModal, setShowModal] = useState(false);
-    const [currencyInput, setCurrencyInput] = useState(config?.currency || '₹');
+    const [currencyInput, setCurrencyInput] = useState(config?.currency || 'INR');
     const [loading, setLoading] = useState(false);
+    const [currencies, setCurrencies] = useState<CurrencyData[]>([]);
+    const [dropdownOpen, setDropdownOpen] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+
+    const filteredCurrencies = currencies.filter(c =>
+        c.countryName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        c.code.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+    useEffect(() => {
+        const loadCurrencies = async () => {
+            if (!showModal) return;
+            const data = await fetchAndCacheCurrencies();
+            if (data) {
+                setCurrencies(data);
+            }
+        };
+        loadCurrencies();
+    }, [showModal]);
 
     const handleUpdate = async () => {
         if (!currencyInput.trim()) return;
@@ -29,7 +59,16 @@ export const CurrencyManager = ({ config }: Pick<SharedSettingsProps, 'config'>)
             <SettingItem
                 icon={DollarSign}
                 label="Currency"
-                value={config?.currency || 'Not Set'}
+                value={(() => {
+                    if (!config?.currency) return 'Not Set';
+                    // Try to find the detailed info from our loaded currencies
+                    const selected = currencies.find(c => `${c.code}_${c.countryName}` === config.currency) || currencies.find(c => c.code === config.currency);
+                    if (selected) {
+                        return `${selected.countryName} (${selected.symbol}) ${selected.code}`;
+                    }
+                    // Fallback to static formatting if data isn't loaded yet
+                    return `${getCurrencySymbol(config.currency)} - ${getCurrencyName(config.currency)}`;
+                })()}
                 color="bg-yellow-500/20 text-yellow-500"
                 onClick={() => setShowModal(true)}
                 delay={0.1}
@@ -57,32 +96,71 @@ export const CurrencyManager = ({ config }: Pick<SharedSettingsProps, 'config'>)
                                 <p className="text-xs text-slate-400 font-medium">Select your household's currency.</p>
                             </div>
 
-                            <select
-                                value={currencyInput}
-                                onChange={(e) => setCurrencyInput(e.target.value)}
-                                className="w-full bg-slate-900 border-2 border-slate-800 rounded-2xl h-14 px-6 text-white focus:outline-none focus:border-primary-500 transition-all text-xl font-bold text-center appearance-none cursor-pointer"
-                            >
-                                <option value="₹">₹ - Indian Rupee (INR)</option>
-                                <option value="$">$ - US Dollar (USD)</option>
-                                <option value="€">€ - Euro (EUR)</option>
-                                <option value="£">£ - British Pound (GBP)</option>
-                                <option value="¥">¥ - Japanese Yen (JPY)</option>
-                                <option value="A$">A$ - Australian Dollar (AUD)</option>
-                                <option value="C$">C$ - Canadian Dollar (CAD)</option>
-                                <option value="CHF">CHF - Swiss Franc</option>
-                                <option value="¥">¥ - Chinese Yuan (CNY)</option>
-                                <option value="kr">kr - Swedish Krona (SEK)</option>
-                                <option value="NZ$">NZ$ - New Zealand Dollar (NZD)</option>
-                                <option value="₩">₩ - South Korean Won (KRW)</option>
-                                <option value="S$">S$ - Singapore Dollar (SGD)</option>
-                                <option value="kr">kr - Norwegian Krone (NOK)</option>
-                                <option value="Mex$">Mex$ - Mexican Peso (MXN)</option>
-                                <option value="kr">kr - Danish Krone (DKK)</option>
-                                <option value="R">R - South African Rand (ZAR)</option>
-                                <option value="R$">R$ - Brazilian Real (BRL)</option>
-                                <option value="NT$">NT$ - New Taiwan Dollar (TWD)</option>
-                                <option value="د.إ">د.إ - UAE Dirham (AED)</option>
-                            </select>
+                            <div className="relative">
+                                <button
+                                    onClick={() => setDropdownOpen(!dropdownOpen)}
+                                    className="w-full bg-slate-900 border-2 border-slate-800 rounded-2xl h-14 px-4 text-white flex items-center justify-between hover:border-primary-500/50 transition-all font-bold"
+                                >
+                                    {currencyInput ? (() => {
+                                        const selected = currencies.find(c => `${c.code}_${c.countryName}` === currencyInput) || currencies.find(c => c.code === currencyInput);
+                                        return selected ? (
+                                            <div className="flex items-center gap-3 overflow-hidden">
+                                                <img src={selected.flag} alt="flag" className="w-5 h-3.5 object-cover rounded-sm shadow-sm shrink-0" />
+                                                <span className="text-sm font-bold truncate">{selected.countryName} ({selected.symbol}) {selected.code}</span>
+                                            </div>
+                                        ) : (
+                                            <span className="text-sm">{currencyInput}</span>
+                                        )
+                                    })() : (
+                                        <span className="text-slate-500">Select Currency</span>
+                                    )}
+                                    <ChevronDown size={18} className="text-slate-500" />
+                                </button>
+
+                                <AnimatePresence>
+                                    {dropdownOpen && (
+                                        <motion.div
+                                            initial={{ opacity: 0, y: -10 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, y: -10 }}
+                                            className="absolute top-full left-0 w-full mt-2 bg-slate-900 border-2 border-slate-800 rounded-2xl overflow-hidden shadow-2xl z-20 flex flex-col"
+                                        >
+                                            <div className="p-2 border-b border-slate-800">
+                                                <div className="relative">
+                                                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                                                    <input
+                                                        autoFocus
+                                                        type="text"
+                                                        placeholder="Search country or currency..."
+                                                        value={searchQuery}
+                                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                                        className="w-full bg-slate-800 rounded-xl h-10 pl-9 pr-4 text-xs text-white focus:outline-none focus:ring-1 focus:ring-primary-500"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="max-h-60 overflow-y-auto p-2 space-y-1 custom-scrollbar">
+                                                {filteredCurrencies.map((c, i) => (
+                                                    <button
+                                                        key={`${c.code}-${i}`}
+                                                        onClick={() => {
+                                                            setCurrencyInput(`${c.code}_${c.countryName}`);
+                                                            setDropdownOpen(false);
+                                                            setSearchQuery('');
+                                                        }}
+                                                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-800 transition-colors text-left ${currencyInput === `${c.code}_${c.countryName}` || currencyInput === c.code ? 'bg-primary-500/10 text-primary-400' : 'text-slate-300'}`}
+                                                    >
+                                                        <img src={c.flag} alt="flag" className="w-5 h-3.5 object-cover rounded-sm shadow-sm shrink-0" />
+                                                        <span className="text-xs font-bold truncate leading-none flex-1">{c.countryName} ({c.symbol}) {c.code}</span>
+                                                    </button>
+                                                ))}
+                                                {filteredCurrencies.length === 0 && (
+                                                    <div className="text-center py-4 text-xs text-slate-500">No results found</div>
+                                                )}
+                                            </div>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            </div>
 
                             <div className="flex gap-3">
                                 <button

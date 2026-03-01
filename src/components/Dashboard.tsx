@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { googleApiService } from '../services/googleApiService';
 import type { InventoryItem, ShoppingListItem, UserConfig } from '../types';
 import { Link } from 'react-router-dom';
+import { getCurrencySymbol } from '../utils/currency';
 
 interface DashboardProps {
     config: UserConfig | null;
@@ -141,7 +142,7 @@ const Dashboard = ({ config }: DashboardProps) => {
                     </div>
                     <div className="flex items-end justify-between">
                         <div className="flex flex-col">
-                            <span className="text-3xl font-black text-white tracking-tighter">{config?.currency || '₹'}{weeklySpend.toLocaleString()}</span>
+                            <span className="text-3xl font-black text-white tracking-tighter">{getCurrencySymbol(config?.currency || 'INR')}{weeklySpend.toLocaleString()}</span>
                             <span className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em]">Spent this week</span>
                         </div>
                         <div className="flex -space-x-3">

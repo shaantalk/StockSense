@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Search, Filter, AlertTriangle, ChevronRight, Package, Loader2, Plus, X, CheckCircle2, ShoppingCart } from 'lucide-react';
+import { Search, Filter, Package, Loader2, Plus, X, CheckCircle2, ShoppingCart } from 'lucide-react';
 import { googleApiService } from '../services/googleApiService';
-import type { InventoryItem, UserConfig } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useSearchParams } from 'react-router-dom';
+import type { InventoryItem, UserConfig } from '../types';
 
 interface InventoryListProps {
     config: UserConfig | null;
@@ -12,7 +13,8 @@ const InventoryList = ({ config }: InventoryListProps) => {
     const [items, setItems] = useState<InventoryItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
-    const [filter, setFilter] = useState<'All' | 'Low Stock' | 'Near Finish' | 'Use Soon' | 'Expired'>('All');
+    const [searchParams] = useSearchParams();
+    const [filter, setFilter] = useState<'All' | 'Low' | 'Use now' | 'Expired' | 'Out of stock'>(searchParams.get('filter') as any || 'All');
 
     const [showAddModal, setShowAddModal] = useState(false);
     const [newItem, setNewItem] = useState<Partial<InventoryItem>>({
@@ -21,10 +23,12 @@ const InventoryList = ({ config }: InventoryListProps) => {
         currentQty: 1,
         unit: 'Numbers',
         threshold: 1,
-        status: 'Normal',
-        expiryDate: ''
+        status: 'Stocked',
+        expiryDate: '',
+        useNowDaysPrior: 1
     });
     const [adding, setAdding] = useState(false);
+    const [statusActionItem, setStatusActionItem] = useState<InventoryItem | null>(null);
 
     useEffect(() => {
         if (config?.activeHouseholdId) {
@@ -36,7 +40,29 @@ const InventoryList = ({ config }: InventoryListProps) => {
         setLoading(true);
         try {
             const data = await googleApiService.getInventory();
-            setItems(data);
+
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            const processedData = await Promise.all(data.map(async (item) => {
+                if (item.expiryDate && item.status !== 'Use now' && item.status !== 'Expired' && item.status !== 'Out of stock') {
+                    const expDate = new Date(item.expiryDate);
+                    expDate.setHours(0, 0, 0, 0);
+                    const diffTime = expDate.getTime() - today.getTime();
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    const thresholdDays = item.useNowDaysPrior ?? 1;
+
+                    if (diffDays <= thresholdDays && diffDays >= 0) {
+                        const updatedItem = { ...item, status: 'Use now' };
+                        // Update in background silently
+                        await googleApiService.updateInventoryItem(updatedItem).catch(console.error);
+                        return updatedItem;
+                    }
+                }
+                return item;
+            }));
+
+            setItems(processedData);
         } catch (e) {
             console.error("Failed to fetch stock:", e);
         } finally {
@@ -44,8 +70,14 @@ const InventoryList = ({ config }: InventoryListProps) => {
         }
     };
 
-    const handleNearFinish = async (item: InventoryItem) => {
-        const updatedItem: InventoryItem = { ...item, status: 'Near Finish' };
+    const handleAddToWishlist = async (item: InventoryItem) => {
+        let updatedItem = item;
+        let requiresInventoryUpdate = false;
+
+        if (item.status === 'Expired') {
+            updatedItem = { ...item, currentQty: 0, status: 'Out of stock' };
+            requiresInventoryUpdate = true;
+        }
 
         // Optimistic update
         setItems(prev => prev.map(i =>
@@ -53,10 +85,11 @@ const InventoryList = ({ config }: InventoryListProps) => {
         ));
 
         try {
-            // 1. Update Inventory Status
-            await googleApiService.updateInventoryItem(updatedItem);
+            if (requiresInventoryUpdate) {
+                await googleApiService.updateInventoryItem(updatedItem);
+            }
 
-            // 2. Add to Shopping List
+            // Add to Shopping List
             await googleApiService.addShoppingItem({
                 itemName: item.itemName,
                 qtyNeeded: 1, // Default or prompt user
@@ -66,7 +99,28 @@ const InventoryList = ({ config }: InventoryListProps) => {
             fetchInventory();
         } catch (e) {
             console.error("Failed to add to wish list:", e);
-            alert("Failed to update item status");
+            alert("Failed to add to wish list");
+            fetchInventory(); // Revert
+        }
+    };
+
+    const handleStatusChange = async (newStatus: string) => {
+        if (!statusActionItem) return;
+
+        const updatedItem = { ...statusActionItem, status: newStatus };
+        if (newStatus === 'Stocked' && statusActionItem.status !== 'Stocked') {
+            const todayStr = new Date().toISOString().split('T')[0];
+            updatedItem.restockedDate = todayStr;
+        }
+
+        setItems(prev => prev.map(i => i.itemName === statusActionItem.itemName ? updatedItem : i));
+        setStatusActionItem(null);
+
+        try {
+            await googleApiService.updateInventoryItem(updatedItem);
+        } catch (e) {
+            console.error("Failed to update status:", e);
+            alert("Failed to update status");
             fetchInventory(); // Revert
         }
     };
@@ -75,7 +129,12 @@ const InventoryList = ({ config }: InventoryListProps) => {
         if (!newItem.itemName) return;
         setAdding(true);
         try {
-            await googleApiService.updateInventoryItem(newItem as InventoryItem);
+            const todayStr = new Date().toISOString().split('T')[0];
+            const itemToSave = {
+                ...newItem,
+                addedDate: newItem.addedDate || todayStr
+            };
+            await googleApiService.updateInventoryItem(itemToSave as InventoryItem);
             setShowAddModal(false);
             setNewItem({
                 itemName: '',
@@ -83,8 +142,9 @@ const InventoryList = ({ config }: InventoryListProps) => {
                 currentQty: 1,
                 unit: config?.units?.[0] || 'Numbers',
                 threshold: 1,
-                status: config?.statuses?.[0]?.name || 'Normal',
-                expiryDate: ''
+                status: 'Stocked',
+                expiryDate: '',
+                useNowDaysPrior: 1
             });
             fetchInventory();
         } catch (e: any) {
@@ -108,14 +168,9 @@ const InventoryList = ({ config }: InventoryListProps) => {
         };
         const todayStr = formatYMD(today);
 
-        const nextWeek = new Date(today);
-        nextWeek.setDate(nextWeek.getDate() + 7);
-        const nextWeekStr = formatYMD(nextWeek);
-
         if (filter === 'All') return true;
-        if (filter === 'Low Stock') return item.currentQty <= item.threshold;
-        if (filter === 'Use Soon') return !!item.expiryDate && item.expiryDate >= todayStr && item.expiryDate <= nextWeekStr;
-        if (filter === 'Expired') return !!item.expiryDate && item.expiryDate < todayStr;
+        if (filter === 'Low') return item.status === 'Low' || (item.currentQty <= item.threshold && item.currentQty > 0);
+        if (filter === 'Expired') return item.status === 'Expired' || (!!item.expiryDate && item.expiryDate < todayStr);
         return item.status === filter;
     });
 
@@ -149,7 +204,7 @@ const InventoryList = ({ config }: InventoryListProps) => {
                 </div>
 
                 <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
-                    {['All', 'Low Stock', 'Near Finish', 'Use Soon', 'Expired'].map((f) => (
+                    {['All', 'Low', 'Use now', 'Expired', 'Out of stock'].map((f) => (
                         <button
                             key={f}
                             onClick={() => setFilter(f as any)}
@@ -204,25 +259,32 @@ const InventoryList = ({ config }: InventoryListProps) => {
                                                 </>
                                             )}
                                         </p>
+                                        {(item.addedDate || item.restockedDate) && (
+                                            <p className="text-[10px] text-slate-500 font-medium mt-1 flex items-center gap-2">
+                                                {item.addedDate && <span>Added: {item.addedDate}</span>}
+                                                {item.restockedDate && <span>Restocked: {item.restockedDate}</span>}
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
 
-                                {item.status !== 'Near Finish' ? (
+                                <div className="flex items-center gap-2">
                                     <button
-                                        onClick={() => handleNearFinish(item)}
-                                        className="p-2 bg-slate-800 text-slate-400 rounded-xl hover:bg-orange-500/20 hover:text-orange-400 transition-all border border-slate-700 group/add flex items-center gap-2"
+                                        onClick={() => handleAddToWishlist(item)}
+                                        className="p-2 bg-slate-800 text-slate-400 rounded-xl hover:bg-blue-500/20 hover:text-blue-400 transition-all border border-slate-700"
                                         title="Add to Wish List"
                                     >
-                                        <AlertTriangle size={18} className="group-hover/add:hidden" />
-                                        <ShoppingCart size={18} className="hidden group-hover/add:block" />
-                                        <span className="hidden group-hover/add:block text-[10px] font-black uppercase tracking-widest pr-1">Wishlist</span>
+                                        <ShoppingCart size={18} />
                                     </button>
-                                ) : (
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-[10px] font-black px-2 py-1 rounded-lg uppercase tracking-tighter" style={{ backgroundColor: `${config?.statuses?.find(s => s.name === item.status)?.color || '#f59e0b'}33`, color: config?.statuses?.find(s => s.name === item.status)?.color || '#f59e0b' }}>{item.status}</span>
-                                        <ChevronRight size={16} className="text-slate-600" />
-                                    </div>
-                                )}
+
+                                    <button
+                                        onClick={() => setStatusActionItem(item)}
+                                        className="p-2 bg-slate-800 text-slate-400 rounded-xl hover:bg-primary-500/20 hover:text-primary-400 transition-all border border-slate-700"
+                                        title="Change Status"
+                                    >
+                                        <Plus size={18} />
+                                    </button>
+                                </div>
                             </motion.div>
                         ))}
                     </AnimatePresence>
@@ -338,15 +400,27 @@ const InventoryList = ({ config }: InventoryListProps) => {
                                     </select>
                                 </div>
 
-                                <div>
-                                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-2 block">Expiry Date (Optional)</label>
-                                    <input
-                                        type="date"
-                                        value={newItem.expiryDate || ''}
-                                        onChange={(e) => setNewItem({ ...newItem, expiryDate: e.target.value })}
-                                        className="w-full bg-slate-900 border-2 border-slate-800 rounded-2xl h-12 px-4 text-white focus:outline-none focus:border-primary-500 transition-all text-sm font-bold"
-                                        style={{ colorScheme: 'dark' }}
-                                    />
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-2 block">Expiry Date (Optional)</label>
+                                        <input
+                                            type="date"
+                                            value={newItem.expiryDate || ''}
+                                            onChange={(e) => setNewItem({ ...newItem, expiryDate: e.target.value })}
+                                            className="w-full bg-slate-900 border-2 border-slate-800 rounded-2xl h-12 px-4 text-white focus:outline-none focus:border-primary-500 transition-all text-sm font-bold"
+                                            style={{ colorScheme: 'dark' }}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-2 block">Mark 'Use Now' before (Days)</label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            value={newItem.useNowDaysPrior}
+                                            onChange={(e) => setNewItem({ ...newItem, useNowDaysPrior: Number(e.target.value) })}
+                                            className="w-full bg-slate-900 border-2 border-slate-800 rounded-2xl h-12 px-4 text-white focus:outline-none focus:border-primary-500 transition-all text-sm font-bold"
+                                        />
+                                    </div>
                                 </div>
                             </div>
 
@@ -357,6 +431,52 @@ const InventoryList = ({ config }: InventoryListProps) => {
                             >
                                 {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <><CheckCircle2 size={16} /> Save Item</>}
                             </button>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Status Change Modal */}
+            <AnimatePresence>
+                {statusActionItem && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-[#0f172a]/90 backdrop-blur-sm"
+                        onClick={() => setStatusActionItem(null)}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, y: 20 }}
+                            animate={{ scale: 1, y: 0 }}
+                            exit={{ scale: 0.9, y: 20 }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-full max-w-sm glass p-6 rounded-[2.5rem] border-primary-500/30 space-y-6"
+                        >
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-xl font-black text-white tracking-tight">Change Status</h3>
+                                <button onClick={() => setStatusActionItem(null)} className="text-slate-500 hover:text-white">
+                                    <X size={24} />
+                                </button>
+                            </div>
+
+                            <p className="text-sm font-bold text-slate-300">Set status for <span className="text-white">{statusActionItem.itemName}</span></p>
+
+                            <div className="flex flex-col gap-2">
+                                {config?.statuses?.map(s => (
+                                    <button
+                                        key={s.name}
+                                        onClick={() => handleStatusChange(s.name)}
+                                        className="w-full flex items-center justify-between p-4 rounded-2xl border border-slate-700/50 hover:bg-slate-800/50 transition-colors group"
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: s.color }} />
+                                            <span className="font-bold text-slate-200 group-hover:text-white transition-colors">{s.name}</span>
+                                        </div>
+                                        {statusActionItem.status === s.name && <CheckCircle2 size={18} className="text-primary-500" />}
+                                    </button>
+                                ))}
+                            </div>
                         </motion.div>
                     </motion.div>
                 )}

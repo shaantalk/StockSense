@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { TrendingDown, ShoppingBag, ChevronRight, ArrowUpRight, Loader2 } from 'lucide-react';
+import { ShoppingBag, ChevronRight, ArrowUpRight, Loader2, AlertCircle, Clock } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { googleApiService } from '../services/googleApiService';
 import type { InventoryItem, ShoppingListItem, UserConfig } from '../types';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { getCurrencySymbol } from '../utils/currency';
 
 interface DashboardProps {
@@ -11,6 +11,7 @@ interface DashboardProps {
 }
 
 const Dashboard = ({ config }: DashboardProps) => {
+    const navigate = useNavigate();
     const [inventory, setInventory] = useState<InventoryItem[]>([]);
     const [shoppingList, setShoppingList] = useState<ShoppingListItem[]>([]);
     const [weeklySpend, setWeeklySpend] = useState(0);
@@ -49,7 +50,12 @@ const Dashboard = ({ config }: DashboardProps) => {
         fetchData();
     }, [config?.activeHouseholdId]);
 
-    const nearFinishCount = inventory.filter(i => i.status === 'Near Finish').length;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayStr = `${today.getFullYear()}-${("0" + (today.getMonth() + 1)).slice(-2)}-${("0" + today.getDate()).slice(-2)}`;
+
+    const useNowCount = inventory.filter(i => i.status === 'Use now').length;
+    const expiredCount = inventory.filter(i => i.status === 'Expired' || (!!i.expiryDate && i.expiryDate < todayStr)).length;
 
     if (loading) {
         return (
@@ -60,12 +66,13 @@ const Dashboard = ({ config }: DashboardProps) => {
         );
     }
 
-    const StatCard = ({ title, value, icon: Icon, color, delay }: any) => (
+    const StatCard = ({ title, value, icon: Icon, color, delay, onClick }: any) => (
         <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay }}
-            className="glass p-4 rounded-3xl flex flex-col gap-2 relative overflow-hidden group border-slate-700/50"
+            onClick={onClick}
+            className="glass p-4 rounded-3xl flex flex-col gap-2 relative overflow-hidden group border-slate-700/50 cursor-pointer hover:border-slate-500 transition-colors"
         >
             <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${color}`}>
                 <Icon size={20} />
@@ -85,20 +92,30 @@ const Dashboard = ({ config }: DashboardProps) => {
                 <p className="text-slate-400 font-medium text-sm">Here's what's happening in your kitchen.</p>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-3">
                 <StatCard
-                    title="Items to Buy"
+                    title="To Buy"
                     value={shoppingList.length}
                     icon={ShoppingBag}
                     color="bg-primary-500/20 text-primary-400"
                     delay={0.1}
+                    onClick={() => navigate('/list')}
                 />
                 <StatCard
-                    title="Near Finish"
-                    value={nearFinishCount}
-                    icon={TrendingDown}
-                    color="bg-red-500/20 text-red-400"
+                    title="Use Now"
+                    value={useNowCount}
+                    icon={Clock}
+                    color="bg-orange-500/20 text-orange-400"
                     delay={0.2}
+                    onClick={() => navigate('/inventory?filter=Use now')}
+                />
+                <StatCard
+                    title="Expired"
+                    value={expiredCount}
+                    icon={AlertCircle}
+                    color="bg-purple-500/20 text-purple-400"
+                    delay={0.3}
+                    onClick={() => navigate('/inventory?filter=Expired')}
                 />
             </div>
 
@@ -108,25 +125,28 @@ const Dashboard = ({ config }: DashboardProps) => {
                     <span className="flex h-2 w-2 rounded-full bg-red-500 animate-pulse" />
                 </h2>
                 <div className="grid gap-3">
-                    {inventory.filter(i => i.status === 'Near Finish').slice(0, 3).map((item) => (
+                    {inventory.filter(i => i.status === 'Use now' || i.status === 'Expired' || (!!i.expiryDate && i.expiryDate < todayStr)).slice(0, 4).map((item) => (
                         <Link
                             key={item.itemName}
-                            to="/inventory"
-                            className="glass p-4 rounded-2xl flex items-center justify-between group hover:border-red-500/50 transition-colors border-slate-700/50"
+                            to={`/inventory?filter=${item.status === 'Expired' || (!!item.expiryDate && item.expiryDate < todayStr) ? 'Expired' : 'Use now'}`}
+                            className="glass p-4 rounded-2xl flex items-center justify-between group hover:border-orange-500/50 transition-colors border-slate-700/50"
                         >
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-xl bg-red-500/10 text-red-400 flex items-center justify-center">
-                                    <TrendingDown size={18} />
+                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${item.status === 'Expired' || (!!item.expiryDate && !!item.expiryDate && item.expiryDate < todayStr) ? 'bg-purple-500/10 text-purple-400' : 'bg-orange-500/10 text-orange-400'}`}>
+                                    {item.status === 'Expired' || (!!item.expiryDate && item.expiryDate < todayStr) ? <AlertCircle size={18} /> : <Clock size={18} />}
                                 </div>
                                 <div>
                                     <h3 className="text-sm font-bold text-white">{item.itemName}</h3>
-                                    <p className="text-xs text-slate-400 font-medium">{item.currentQty} {item.unit} left</p>
+                                    <p className="text-xs text-slate-400 font-medium">
+                                        {item.status === 'Expired' || (!!item.expiryDate && item.expiryDate < todayStr) ? <span className="text-purple-400">Expired</span> : <span className="text-orange-400">Use soon</span>}
+                                        {' '}• {item.currentQty} {item.unit} left
+                                    </p>
                                 </div>
                             </div>
-                            <ChevronRight size={16} className="text-slate-500 group-hover:text-red-400 group-hover:translate-x-1 transition-all" />
+                            <ChevronRight size={16} className="text-slate-500 group-hover:text-orange-400 group-hover:translate-x-1 transition-all" />
                         </Link>
                     ))}
-                    {nearFinishCount === 0 && (
+                    {(useNowCount === 0 && expiredCount === 0) && (
                         <div className="glass p-6 rounded-2xl text-center border-slate-700/50">
                             <p className="text-slate-500 text-sm font-medium italic">All systems go! Everything in stock.</p>
                         </div>

@@ -206,7 +206,7 @@ const ShoppingList = ({ config }: ShoppingListProps) => {
                                 >
                                     <span className="flex items-center gap-3">
                                         <CheckCircle2 size={24} />
-                                        Bought {selectedItems.length} items
+                                        Restocked {selectedItems.length} items
                                     </span>
                                     <ChevronRight size={24} />
                                 </button>

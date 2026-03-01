@@ -111,7 +111,13 @@ function App() {
         if (legacyMembers.length > 0 && members.length === 0) members = legacyMembers;
 
         if (units.length === 0) units = ['Kilos', 'Liters', 'Grams', 'Numbers', 'Packets'];
-        if (statuses.length === 0) statuses = [{ name: 'Normal', color: '#10b981' }, { name: 'Near Finish', color: '#f59e0b' }];
+        if (statuses.length === 0) statuses = [
+          { name: 'Stocked', color: '#10b981' },
+          { name: 'Expired', color: '#a855f7' },
+          { name: 'Low', color: '#ef4444' },
+          { name: 'Out of stock', color: '#6b7280' },
+          { name: 'Use now', color: '#f59e0b' }
+        ];
 
         const currencyEntry = settingsData.find((c: any) => c.key === 'Currency') || configData.find((c: any) => c.type === 'Currency');
         if (currencyEntry) currency = currencyEntry.value;

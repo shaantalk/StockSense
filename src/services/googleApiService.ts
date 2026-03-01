@@ -115,7 +115,7 @@ export const googleApiService = {
             });
 
             const initialData = [
-                { range: "Inventory!A1", values: [["ItemName", "Category", "CurrentQty", "Unit", "Threshold", "Status", "ExpiryDate"]] },
+                { range: "Inventory!A1", values: [["ItemName", "Category", "CurrentQty", "Unit", "Threshold", "Status", "ExpiryDate", "AddedDate", "RestockedDate", "UseNowDaysPrior"]] },
                 { range: "ShoppingList!A1", values: [["ItemName", "QtyNeeded", "Priority"]] },
                 { range: "ShopEvents!A1", values: [["EventID", "Date", "ShopSource", "TotalAmount", "Buyer", "EntryType"]] },
                 { range: "PurchasedItems!A1", values: [["EventID", "ItemName", "QtyBought", "PricePerUnit"]] },
@@ -123,7 +123,7 @@ export const googleApiService = {
                 { range: "Shops!A1", values: [["Name", "Color"], ["Amazon", "#f97316"], ["Blinkit", "#facc15"], ["Instamart", "#fb923c"], ["BigBasket", "#84cc16"]] },
                 { range: "Members!A1", values: [["Email", "Color", "Name", "Picture", "PreferredCurrency", "IsOwner"]] },
                 { range: "Units!A1", values: [["Name"], ["Kilos"], ["Liters"], ["Grams"], ["Numbers"], ["Packets"]] },
-                { range: "Statuses!A1", values: [["Name", "Color"], ["Normal", "#10b981"], ["Near Finish", "#f59e0b"]] },
+                { range: "Statuses!A1", values: [["Name", "Color"], ["Stocked", "#10b981"], ["Expired", "#a855f7"], ["Low", "#ef4444"], ["Out of stock", "#6b7280"], ["Use now", "#f59e0b"]] },
                 { range: "Settings!A1", values: [["Key", "Value"]] }
             ];
 
@@ -265,6 +265,7 @@ export const googleApiService = {
             ...item,
             currentQty: Number(item.currentQty),
             threshold: Number(item.threshold),
+            useNowDaysPrior: item.useNowDaysPrior ? Number(item.useNowDaysPrior) : 1,
             expiryDate: item.expiryDate || ''
         }));
     },
@@ -302,16 +303,16 @@ export const googleApiService = {
             await googleFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Inventory!A1:append?valueInputOption=RAW`, {
                 method: 'POST',
                 body: JSON.stringify({
-                    values: [[item.itemName, item.category, item.currentQty, item.unit, item.threshold, item.status, item.expiryDate || '']]
+                    values: [[item.itemName, item.category, item.currentQty, item.unit, item.threshold, item.status, item.expiryDate || '', item.addedDate || '', item.restockedDate || '', item.useNowDaysPrior ?? 1]]
                 })
             });
         } else {
             // Update existing (Sheet row is 1-indexed)
-            const range = `Inventory!A${rowIndex + 1}:G${rowIndex + 1}`;
+            const range = `Inventory!A${rowIndex + 1}:J${rowIndex + 1}`;
             await googleFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=RAW`, {
                 method: 'PUT',
                 body: JSON.stringify({
-                    values: [[item.itemName, item.category, item.currentQty, item.unit, item.threshold, item.status, item.expiryDate || '']]
+                    values: [[item.itemName, item.category, item.currentQty, item.unit, item.threshold, item.status, item.expiryDate || '', item.addedDate || '', item.restockedDate || '', item.useNowDaysPrior ?? 1]]
                 })
             });
         }

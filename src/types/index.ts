@@ -11,6 +11,9 @@ export interface InventoryItem {
     threshold: number;
     status: ItemStatus;
     expiryDate?: string;
+    addedDate?: string;
+    restockedDate?: string;
+    useNowDaysPrior?: number;
 }
 
 export interface ShoppingListItem {

@@ -82,6 +82,20 @@ const ShoppingList = ({ config }: ShoppingListProps) => {
         );
     };
 
+    const handleUpdateQty = async (item: ShoppingListItem, newQty: number) => {
+        if (newQty < 1) return;
+
+        // Optimistic update
+        setList(prev => prev.map(i => i.itemName === item.itemName ? { ...i, qtyNeeded: newQty } : i));
+
+        try {
+            await googleApiService.updateShoppingItem(item.itemName, newQty);
+        } catch (e) {
+            console.error("Failed to update quantity:", e);
+            fetchData(); // Revert on failure
+        }
+    };
+
     const handleCheckout = async () => {
         if (!shop || !buyer || selectedItems.length === 0) return;
 
@@ -167,9 +181,25 @@ const ShoppingList = ({ config }: ShoppingListProps) => {
                                         </div>
                                         <div>
                                             <h3 className="font-bold text-white text-base">{item.itemName}</h3>
-                                            <p className="text-[11px] text-slate-500 font-black uppercase tracking-widest mt-0.5">
-                                                QTY: {item.qtyNeeded} • {item.priority}
-                                            </p>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); handleUpdateQty(item, item.qtyNeeded - 1); }}
+                                                    className="w-6 h-6 rounded-lg bg-slate-800 text-slate-400 flex items-center justify-center hover:bg-slate-700 hover:text-white transition-colors"
+                                                    disabled={item.qtyNeeded <= 1}
+                                                    title="Decrease Qty"
+                                                >
+                                                    -
+                                                </button>
+                                                <span className="text-xs font-black text-slate-300 w-5 text-center">{item.qtyNeeded}</span>
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); handleUpdateQty(item, item.qtyNeeded + 1); }}
+                                                    className="w-6 h-6 rounded-lg bg-slate-800 text-slate-400 flex items-center justify-center hover:bg-slate-700 hover:text-white transition-colors"
+                                                    title="Increase Qty"
+                                                >
+                                                    +
+                                                </button>
+                                                <span className="text-[10px] text-slate-500 font-black uppercase tracking-widest ml-1">• {item.priority}</span>
+                                            </div>
                                         </div>
                                     </div>
                                     {selectedItems.includes(item.itemName) && (

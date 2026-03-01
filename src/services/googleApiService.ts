@@ -330,6 +330,25 @@ export const googleApiService = {
         });
     },
 
+    async updateShoppingItem(itemName: string, qtyNeeded: number): Promise<void> {
+        const spreadsheetId = localStorage.getItem('activeHouseholdId');
+        if (!spreadsheetId) return;
+
+        const data = await googleFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/ShoppingList!A:A`);
+        const rows = data.values || [];
+        const rowIndex = rows.findIndex((r: any) => r[0] === itemName);
+
+        if (rowIndex !== -1) {
+            const range = `ShoppingList!B${rowIndex + 1}`;
+            await googleFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=RAW`, {
+                method: 'PUT',
+                body: JSON.stringify({
+                    values: [[qtyNeeded]]
+                })
+            });
+        }
+    },
+
     async removeShoppingItem(itemName: string): Promise<void> {
         const spreadsheetId = localStorage.getItem('activeHouseholdId');
         if (!spreadsheetId) return;

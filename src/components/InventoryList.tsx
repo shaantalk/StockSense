@@ -12,7 +12,7 @@ const InventoryList = ({ config }: InventoryListProps) => {
     const [items, setItems] = useState<InventoryItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
-    const [filter, setFilter] = useState<'All' | 'Low Stock' | 'Near Finish'>('All');
+    const [filter, setFilter] = useState<'All' | 'Low Stock' | 'Near Finish' | 'Use Soon' | 'Expired'>('All');
 
     const [showAddModal, setShowAddModal] = useState(false);
     const [newItem, setNewItem] = useState<Partial<InventoryItem>>({
@@ -21,7 +21,8 @@ const InventoryList = ({ config }: InventoryListProps) => {
         currentQty: 1,
         unit: 'Numbers',
         threshold: 1,
-        status: 'Normal'
+        status: 'Normal',
+        expiryDate: ''
     });
     const [adding, setAdding] = useState(false);
 
@@ -82,7 +83,8 @@ const InventoryList = ({ config }: InventoryListProps) => {
                 currentQty: 1,
                 unit: config?.units?.[0] || 'Numbers',
                 threshold: 1,
-                status: config?.statuses?.[0]?.name || 'Normal'
+                status: config?.statuses?.[0]?.name || 'Normal',
+                expiryDate: ''
             });
             fetchInventory();
         } catch (e: any) {
@@ -94,8 +96,27 @@ const InventoryList = ({ config }: InventoryListProps) => {
 
     const filteredItems = items.filter(item => {
         const matchesSearch = item.itemName.toLowerCase().includes(search.toLowerCase());
-        if (filter === 'All') return matchesSearch;
-        return matchesSearch && item.status === filter;
+        if (!matchesSearch) return false;
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        // Use local timezone string formatting (YYYY-MM-DD)
+        const formatYMD = (d: Date) => {
+            const z = (n: number) => ('0' + n).slice(-2);
+            return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`;
+        };
+        const todayStr = formatYMD(today);
+
+        const nextWeek = new Date(today);
+        nextWeek.setDate(nextWeek.getDate() + 7);
+        const nextWeekStr = formatYMD(nextWeek);
+
+        if (filter === 'All') return true;
+        if (filter === 'Low Stock') return item.currentQty <= item.threshold;
+        if (filter === 'Use Soon') return !!item.expiryDate && item.expiryDate >= todayStr && item.expiryDate <= nextWeekStr;
+        if (filter === 'Expired') return !!item.expiryDate && item.expiryDate < todayStr;
+        return item.status === filter;
     });
 
     return (
@@ -128,7 +149,7 @@ const InventoryList = ({ config }: InventoryListProps) => {
                 </div>
 
                 <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
-                    {['All', 'Low Stock', 'Near Finish'].map((f) => (
+                    {['All', 'Low Stock', 'Near Finish', 'Use Soon', 'Expired'].map((f) => (
                         <button
                             key={f}
                             onClick={() => setFilter(f as any)}
@@ -174,6 +195,14 @@ const InventoryList = ({ config }: InventoryListProps) => {
                                                 style={{ backgroundColor: config?.categories?.find(c => c.name === item.category)?.color || '#94a3b8' }}
                                             />
                                             {item.category}
+                                            {item.expiryDate && (
+                                                <>
+                                                    <span className="opacity-50 mx-1">•</span>
+                                                    <span className={`${item.expiryDate < new Date().toISOString().split('T')[0] ? 'text-red-400' : 'text-orange-400'} flex items-center gap-1`}>
+                                                        Exp: {item.expiryDate}
+                                                    </span>
+                                                </>
+                                            )}
                                         </p>
                                     </div>
                                 </div>
@@ -307,6 +336,17 @@ const InventoryList = ({ config }: InventoryListProps) => {
                                             <option value="Normal">Normal</option>
                                         )}
                                     </select>
+                                </div>
+
+                                <div>
+                                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-2 block">Expiry Date (Optional)</label>
+                                    <input
+                                        type="date"
+                                        value={newItem.expiryDate || ''}
+                                        onChange={(e) => setNewItem({ ...newItem, expiryDate: e.target.value })}
+                                        className="w-full bg-slate-900 border-2 border-slate-800 rounded-2xl h-12 px-4 text-white focus:outline-none focus:border-primary-500 transition-all text-sm font-bold"
+                                        style={{ colorScheme: 'dark' }}
+                                    />
                                 </div>
                             </div>
 

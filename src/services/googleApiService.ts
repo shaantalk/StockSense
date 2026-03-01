@@ -115,7 +115,7 @@ export const googleApiService = {
             });
 
             const initialData = [
-                { range: "Inventory!A1", values: [["ItemName", "Category", "CurrentQty", "Unit", "Threshold", "Status"]] },
+                { range: "Inventory!A1", values: [["ItemName", "Category", "CurrentQty", "Unit", "Threshold", "Status", "ExpiryDate"]] },
                 { range: "ShoppingList!A1", values: [["ItemName", "QtyNeeded", "Priority"]] },
                 { range: "ShopEvents!A1", values: [["EventID", "Date", "ShopSource", "TotalAmount", "Buyer", "EntryType"]] },
                 { range: "PurchasedItems!A1", values: [["EventID", "ItemName", "QtyBought", "PricePerUnit"]] },
@@ -263,7 +263,8 @@ export const googleApiService = {
         return data.map(item => ({
             ...item,
             currentQty: Number(item.currentQty),
-            threshold: Number(item.threshold)
+            threshold: Number(item.threshold),
+            expiryDate: item.expiryDate || ''
         }));
     },
 
@@ -300,16 +301,16 @@ export const googleApiService = {
             await googleFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Inventory!A1:append?valueInputOption=RAW`, {
                 method: 'POST',
                 body: JSON.stringify({
-                    values: [[item.itemName, item.category, item.currentQty, item.unit, item.threshold, item.status]]
+                    values: [[item.itemName, item.category, item.currentQty, item.unit, item.threshold, item.status, item.expiryDate || '']]
                 })
             });
         } else {
             // Update existing (Sheet row is 1-indexed)
-            const range = `Inventory!A${rowIndex + 1}:F${rowIndex + 1}`;
+            const range = `Inventory!A${rowIndex + 1}:G${rowIndex + 1}`;
             await googleFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=RAW`, {
                 method: 'PUT',
                 body: JSON.stringify({
-                    values: [[item.itemName, item.category, item.currentQty, item.unit, item.threshold, item.status]]
+                    values: [[item.itemName, item.category, item.currentQty, item.unit, item.threshold, item.status, item.expiryDate || '']]
                 })
             });
         }

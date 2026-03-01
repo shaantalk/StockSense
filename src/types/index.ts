@@ -10,6 +10,7 @@ export interface InventoryItem {
     unit: Unit;
     threshold: number;
     status: ItemStatus;
+    expiryDate?: string;
 }
 
 export interface ShoppingListItem {

@@ -27,7 +27,9 @@ const InventoryList = ({ config }: InventoryListProps) => {
         threshold: 1,
         status: 'Stocked',
         expiryDate: '',
-        useNowDaysPrior: 1
+        useNowDaysPrior: 1,
+        stepQty: 1,
+        notes: ''
     });
     const [adding, setAdding] = useState(false);
     const [statusActionItem, setStatusActionItem] = useState<InventoryItem | null>(null);
@@ -94,7 +96,7 @@ const InventoryList = ({ config }: InventoryListProps) => {
             // Add to Shopping List
             await googleApiService.addShoppingItem({
                 itemName: item.itemName,
-                qtyNeeded: 1, // Default or prompt user
+                qtyNeeded: item.stepQty || 1, // Add minimum step qty instead of 1
                 priority: 'Medium'
             });
 
@@ -146,7 +148,9 @@ const InventoryList = ({ config }: InventoryListProps) => {
                 threshold: 1,
                 status: 'Stocked',
                 expiryDate: '',
-                useNowDaysPrior: 1
+                useNowDaysPrior: 1,
+                stepQty: 1,
+                notes: ''
             });
             fetchInventory();
         } catch (e: any) {
@@ -261,11 +265,19 @@ const InventoryList = ({ config }: InventoryListProps) => {
                                                 </>
                                             )}
                                         </p>
-                                        {(item.addedDate || item.restockedDate) && (
-                                            <p className="text-[10px] text-slate-500 font-medium mt-1 flex items-center gap-2">
-                                                {item.addedDate && <span>Added: {item.addedDate}</span>}
-                                                {item.restockedDate && <span>Restocked: {item.restockedDate}</span>}
-                                            </p>
+                                        {(item.addedDate || item.restockedDate || item.stepQty || item.notes) && (
+                                            <div className="text-[10px] text-slate-500 font-medium mt-1">
+                                                <div className="flex items-center gap-2">
+                                                    {item.addedDate && <span>Added: {item.addedDate}</span>}
+                                                    {item.restockedDate && <span>Restocked: {item.restockedDate}</span>}
+                                                </div>
+                                                {(item.stepQty !== undefined && item.stepQty > 1) && (
+                                                    <div className="mt-0.5"><span className="text-slate-400">Step Qty:</span> {item.stepQty}</div>
+                                                )}
+                                                {item.notes && (
+                                                    <div className="mt-0.5 line-clamp-1"><span className="text-slate-400">Notes:</span> {item.notes}</div>
+                                                )}
+                                            </div>
                                         )}
                                     </div>
                                 </div>

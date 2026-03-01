@@ -115,7 +115,7 @@ export const googleApiService = {
             });
 
             const initialData = [
-                { range: "Inventory!A1", values: [["ItemName", "Category", "CurrentQty", "Unit", "Threshold", "Status", "ExpiryDate", "AddedDate", "RestockedDate", "UseNowDaysPrior"]] },
+                { range: "Inventory!A1", values: [["ItemName", "Category", "CurrentQty", "Unit", "Threshold", "Status", "ExpiryDate", "AddedDate", "RestockedDate", "UseNowDaysPrior", "StepQty", "Notes"]] },
                 { range: "ShoppingList!A1", values: [["ItemName", "QtyNeeded", "Priority"]] },
                 { range: "ShopEvents!A1", values: [["EventID", "Date", "ShopSource", "TotalAmount", "Buyer", "EntryType"]] },
                 { range: "PurchasedItems!A1", values: [["EventID", "ItemName", "QtyBought", "PricePerUnit"]] },
@@ -266,6 +266,8 @@ export const googleApiService = {
             currentQty: Number(item.currentQty),
             threshold: Number(item.threshold),
             useNowDaysPrior: item.useNowDaysPrior ? Number(item.useNowDaysPrior) : 1,
+            stepQty: item.stepQty ? Number(item.stepQty) : 1,
+            notes: item.notes || '',
             expiryDate: item.expiryDate || ''
         }));
     },
@@ -303,16 +305,16 @@ export const googleApiService = {
             await googleFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Inventory!A1:append?valueInputOption=RAW`, {
                 method: 'POST',
                 body: JSON.stringify({
-                    values: [[item.itemName, item.category, item.currentQty, item.unit, item.threshold, item.status, item.expiryDate || '', item.addedDate || '', item.restockedDate || '', item.useNowDaysPrior ?? 1]]
+                    values: [[item.itemName, item.category, item.currentQty, item.unit, item.threshold, item.status, item.expiryDate || '', item.addedDate || '', item.restockedDate || '', item.useNowDaysPrior ?? 1, item.stepQty ?? 1, item.notes || '']]
                 })
             });
         } else {
             // Update existing (Sheet row is 1-indexed)
-            const range = `Inventory!A${rowIndex + 1}:J${rowIndex + 1}`;
+            const range = `Inventory!A${rowIndex + 1}:L${rowIndex + 1}`;
             await googleFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=RAW`, {
                 method: 'PUT',
                 body: JSON.stringify({
-                    values: [[item.itemName, item.category, item.currentQty, item.unit, item.threshold, item.status, item.expiryDate || '', item.addedDate || '', item.restockedDate || '', item.useNowDaysPrior ?? 1]]
+                    values: [[item.itemName, item.category, item.currentQty, item.unit, item.threshold, item.status, item.expiryDate || '', item.addedDate || '', item.restockedDate || '', item.useNowDaysPrior ?? 1, item.stepQty ?? 1, item.notes || '']]
                 })
             });
         }

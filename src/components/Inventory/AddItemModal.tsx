@@ -83,7 +83,9 @@ export const AddItemModal = ({ show, onClose, newItem, setNewItem, onAdd, adding
                                                             threshold: item.threshold,
                                                             status: item.status,
                                                             currentQty: item.currentQty,
-                                                            useNowDaysPrior: item.useNowDaysPrior
+                                                            useNowDaysPrior: item.useNowDaysPrior,
+                                                            stepQty: item.stepQty || 1,
+                                                            notes: item.notes || ''
                                                         });
                                                         setShowSuggestions(false);
                                                     }}
@@ -188,14 +190,36 @@ export const AddItemModal = ({ show, onClose, newItem, setNewItem, onAdd, adding
                             </div>
 
                             <div>
-                                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-2 block">Expiry Date (Optional)</label>
-                                <input
-                                    type="date"
-                                    value={newItem.expiryDate || ''}
-                                    onChange={(e) => setNewItem({ ...newItem, expiryDate: e.target.value })}
-                                    className="w-full bg-slate-900 border-2 border-slate-800 rounded-2xl h-12 px-4 text-white focus:outline-none focus:border-primary-500 transition-all text-sm font-bold"
-                                    style={{ colorScheme: 'dark' }}
+                                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-2 block">Notes (Optional)</label>
+                                <textarea
+                                    value={newItem.notes || ''}
+                                    onChange={(e) => setNewItem({ ...newItem, notes: e.target.value })}
+                                    placeholder="e.g. specific brand, location in store"
+                                    className="w-full bg-slate-900 border-2 border-slate-800 rounded-2xl p-4 text-white focus:outline-none focus:border-primary-500 transition-all text-sm font-bold min-h-[80px]"
                                 />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-2 block">Expiry Date (Optional)</label>
+                                    <input
+                                        type="date"
+                                        value={newItem.expiryDate || ''}
+                                        onChange={(e) => setNewItem({ ...newItem, expiryDate: e.target.value })}
+                                        className="w-full bg-slate-900 border-2 border-slate-800 rounded-2xl h-12 px-4 text-white focus:outline-none focus:border-primary-500 transition-all text-sm font-bold"
+                                        style={{ colorScheme: 'dark' }}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-2 block">Step Qty (e.g. pack sizes)</label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        value={newItem.stepQty || 1}
+                                        onChange={(e) => setNewItem({ ...newItem, stepQty: Number(e.target.value) })}
+                                        className="w-full bg-slate-900 border-2 border-slate-800 rounded-2xl h-12 px-4 text-white focus:outline-none focus:border-primary-500 transition-all text-sm font-bold"
+                                    />
+                                </div>
                             </div>
                             <div>
                                 <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-2 block">Mark 'Use Now' before (Days) (Optional)</label>

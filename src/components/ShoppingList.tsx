@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { ClipboardList, CheckCircle2, ShoppingBag, User, Store, ChevronRight, PackageCheck, Trash2, Loader2 } from 'lucide-react';
+import { ClipboardList, CheckCircle2, ShoppingBag, User, Store, ChevronRight, PackageCheck, Trash2, Loader2, Eye, Info, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { googleApiService } from '../services/googleApiService';
-import type { ShoppingListItem, UserConfig, ShopEvent, PurchasedItem } from '../types';
+import type { ShoppingListItem, UserConfig, ShopEvent, PurchasedItem, InventoryItem } from '../types';
 import { clsx, type ClassValue } from 'clsx';
 import { getCurrencySymbol, convertCurrency, extractCode } from '../utils/currency';
 import { fetchAndCacheExchangeRates } from '../services/initService';
@@ -18,9 +18,11 @@ interface ShoppingListProps {
 
 const ShoppingList = ({ config }: ShoppingListProps) => {
     const [list, setList] = useState<ShoppingListItem[]>([]);
+    const [inventory, setInventory] = useState<InventoryItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedItems, setSelectedItems] = useState<string[]>([]);
     const [showCheckout, setShowCheckout] = useState(false);
+    const [detailsItem, setDetailsItem] = useState<InventoryItem | null>(null);
 
     // Checkout Form State
     const [shop, setShop] = useState('');
@@ -65,8 +67,12 @@ const ShoppingList = ({ config }: ShoppingListProps) => {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const shopData = await googleApiService.getShoppingList();
+            const [shopData, invData] = await Promise.all([
+                googleApiService.getShoppingList(),
+                googleApiService.getInventory()
+            ]);
             setList(shopData);
+            setInventory(invData);
         } catch (e) {
             console.error("Failed to fetch shopping list:", e);
         } finally {
@@ -82,17 +88,35 @@ const ShoppingList = ({ config }: ShoppingListProps) => {
         );
     };
 
-    const handleUpdateQty = async (item: ShoppingListItem, newQty: number) => {
-        if (newQty < 1) return;
+    const handleUpdateQty = async (e: React.MouseEvent, item: ShoppingListItem, change: number) => {
+        e.stopPropagation();
+        const invItem = inventory.find(i => i.itemName === item.itemName);
+        const step = invItem?.stepQty || 1;
+
+        let newQty = item.qtyNeeded + (change * step);
+        if (newQty < step) newQty = step;
+
+        if (newQty === item.qtyNeeded) return;
 
         // Optimistic update
         setList(prev => prev.map(i => i.itemName === item.itemName ? { ...i, qtyNeeded: newQty } : i));
 
         try {
             await googleApiService.updateShoppingItem(item.itemName, newQty);
-        } catch (e) {
-            console.error("Failed to update quantity:", e);
+        } catch (err) {
+            console.error("Failed to update quantity:", err);
             fetchData(); // Revert on failure
+        }
+    };
+
+    const handleRemoveItem = async (e: React.MouseEvent, itemName: string) => {
+        e.stopPropagation();
+        setList(prev => prev.filter(i => i.itemName !== itemName));
+        setSelectedItems(prev => prev.filter(i => i !== itemName));
+        try {
+            await googleApiService.removeShoppingItem(itemName);
+        } catch (err) {
+            fetchData();
         }
     };
 
@@ -155,60 +179,81 @@ const ShoppingList = ({ config }: ShoppingListProps) => {
                 <>
                     <div className="grid gap-3">
                         <AnimatePresence mode="popLayout">
-                            {list.map((item, idx) => (
-                                <motion.div
-                                    key={item.itemName}
-                                    initial={{ opacity: 0, x: -20 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    exit={{ opacity: 0, scale: 0.95 }}
-                                    transition={{ delay: idx * 0.05 }}
-                                    onClick={() => toggleItem(item.itemName)}
-                                    className={cn(
-                                        "glass p-4 rounded-[2rem] flex items-center justify-between group cursor-pointer transition-all duration-300 border-2",
-                                        selectedItems.includes(item.itemName)
-                                            ? "border-primary-500/50 bg-primary-500/10 shadow-[0_0_20px_rgba(14,165,233,0.1)]"
-                                            : "border-slate-800/50"
-                                    )}
-                                >
-                                    <div className="flex items-center gap-4">
-                                        <div className={cn(
-                                            "w-11 h-11 rounded-2xl flex items-center justify-center transition-all",
+                            {list.map((item, idx) => {
+                                const invItem = inventory.find(i => i.itemName === item.itemName);
+                                const step = invItem?.stepQty || 1;
+
+                                return (
+                                    <motion.div
+                                        key={item.itemName}
+                                        initial={{ opacity: 0, x: -20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        exit={{ opacity: 0, scale: 0.95 }}
+                                        transition={{ delay: idx * 0.05 }}
+                                        onClick={() => toggleItem(item.itemName)}
+                                        className={cn(
+                                            "glass p-4 rounded-[2rem] flex items-center justify-between group cursor-pointer transition-all duration-300 border-2",
                                             selectedItems.includes(item.itemName)
-                                                ? "bg-primary-600 text-white rotate-6 scale-110 shadow-lg shadow-primary-500/30"
-                                                : "bg-slate-800 text-slate-500 group-hover:bg-slate-700"
-                                        )}>
-                                            {selectedItems.includes(item.itemName) ? <CheckCircle2 size={22} /> : <ClipboardList size={22} />}
-                                        </div>
-                                        <div>
-                                            <h3 className="font-bold text-white text-base">{item.itemName}</h3>
-                                            <div className="flex items-center gap-2 mt-1">
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); handleUpdateQty(item, item.qtyNeeded - 1); }}
-                                                    className="w-6 h-6 rounded-lg bg-slate-800 text-slate-400 flex items-center justify-center hover:bg-slate-700 hover:text-white transition-colors"
-                                                    disabled={item.qtyNeeded <= 1}
-                                                    title="Decrease Qty"
-                                                >
-                                                    -
-                                                </button>
-                                                <span className="text-xs font-black text-slate-300 w-5 text-center">{item.qtyNeeded}</span>
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); handleUpdateQty(item, item.qtyNeeded + 1); }}
-                                                    className="w-6 h-6 rounded-lg bg-slate-800 text-slate-400 flex items-center justify-center hover:bg-slate-700 hover:text-white transition-colors"
-                                                    title="Increase Qty"
-                                                >
-                                                    +
-                                                </button>
-                                                <span className="text-[10px] text-slate-500 font-black uppercase tracking-widest ml-1">• {item.priority}</span>
+                                                ? "border-primary-500/50 bg-primary-500/10 shadow-[0_0_20px_rgba(14,165,233,0.1)]"
+                                                : "border-slate-800/50"
+                                        )}
+                                    >
+                                        <div className="flex items-center gap-4">
+                                            <div className={cn(
+                                                "w-11 h-11 rounded-2xl flex items-center justify-center transition-all",
+                                                selectedItems.includes(item.itemName)
+                                                    ? "bg-primary-600 text-white rotate-6 scale-110 shadow-lg shadow-primary-500/30"
+                                                    : "bg-slate-800 text-slate-500 group-hover:bg-slate-700"
+                                            )}>
+                                                {selectedItems.includes(item.itemName) ? <CheckCircle2 size={22} /> : <ClipboardList size={22} />}
+                                            </div>
+                                            <div>
+                                                <h3 className="font-bold text-white text-base flex items-center gap-2">
+                                                    {item.itemName}
+                                                    {invItem && (
+                                                        <button onClick={(e) => { e.stopPropagation(); setDetailsItem(invItem); }} className="text-slate-500 hover:text-primary-400">
+                                                            <Eye size={16} />
+                                                        </button>
+                                                    )}
+                                                </h3>
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    <button
+                                                        onClick={(e) => handleUpdateQty(e, item, -1)}
+                                                        className="w-6 h-6 rounded-lg bg-slate-800 text-slate-400 flex items-center justify-center hover:bg-slate-700 hover:text-white transition-colors"
+                                                        disabled={item.qtyNeeded <= step}
+                                                        title="Decrease Qty"
+                                                    >
+                                                        -
+                                                    </button>
+                                                    <span className="text-xs font-black text-slate-300 w-auto min-w-[20px] text-center">{item.qtyNeeded} <span className="text-slate-500 uppercase font-bold text-[10px]">{invItem?.unit || ''}</span></span>
+                                                    <button
+                                                        onClick={(e) => handleUpdateQty(e, item, 1)}
+                                                        className="w-6 h-6 rounded-lg bg-slate-800 text-slate-400 flex items-center justify-center hover:bg-slate-700 hover:text-white transition-colors"
+                                                        title="Increase Qty"
+                                                    >
+                                                        +
+                                                    </button>
+                                                    <span className="text-[10px] text-slate-500 font-black uppercase tracking-widest ml-1 hidden sm:inline">• {item.priority}</span>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                    {selectedItems.includes(item.itemName) && (
-                                        <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}>
-                                            <PackageCheck className="text-primary-400" size={24} />
-                                        </motion.div>
-                                    )}
-                                </motion.div>
-                            ))}
+                                        <div className="flex items-center gap-2">
+                                            {selectedItems.includes(item.itemName) && (
+                                                <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}>
+                                                    <PackageCheck className="text-primary-400" size={24} />
+                                                </motion.div>
+                                            )}
+                                            <button
+                                                onClick={(e) => handleRemoveItem(e, item.itemName)}
+                                                className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-colors"
+                                                title="Remove from Wish List"
+                                            >
+                                                <Trash2 size={18} />
+                                            </button>
+                                        </div>
+                                    </motion.div>
+                                );
+                            })}
                         </AnimatePresence>
 
                         {list.length === 0 && (
@@ -345,6 +390,63 @@ const ShoppingList = ({ config }: ShoppingListProps) => {
                             </div>
                         </motion.div>
                     </>
+                )}
+            </AnimatePresence>
+
+            {/* Details Modal */}
+            <AnimatePresence>
+                {detailsItem && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[90] flex items-center justify-center p-6 bg-[#0f172a]/90 backdrop-blur-sm"
+                        onClick={() => setDetailsItem(null)}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, y: 20 }}
+                            animate={{ scale: 1, y: 0 }}
+                            exit={{ scale: 0.9, y: 20 }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-full max-w-sm glass p-6 rounded-[2.5rem] border-primary-500/30 space-y-6"
+                        >
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-xl font-black text-white tracking-tight flex items-center gap-2">
+                                    <Info className="text-primary-400" size={24} />
+                                    Details
+                                </h3>
+                                <button onClick={() => setDetailsItem(null)} className="text-slate-500 hover:text-white bg-slate-800 rounded-full p-1.5">
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            <div className="space-y-4">
+                                <div>
+                                    <h4 className="text-sm font-black text-slate-300">Item Name</h4>
+                                    <p className="text-lg font-bold text-white">{detailsItem.itemName}</p>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="bg-slate-800/50 p-3 rounded-2xl border border-slate-700/50">
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Stock Left</p>
+                                        <p className="font-bold text-white">{detailsItem.currentQty} <span className="text-xs text-slate-400">{detailsItem.unit}</span></p>
+                                    </div>
+                                    <div className="bg-slate-800/50 p-3 rounded-2xl border border-slate-700/50">
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Step Qty</p>
+                                        <p className="font-bold text-white">{detailsItem.stepQty || 1} <span className="text-xs text-slate-400">{detailsItem.unit}</span></p>
+                                    </div>
+                                </div>
+                                <div>
+                                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-2">Notes</h4>
+                                    <div className="bg-slate-900/50 p-4 rounded-2xl border border-slate-800 min-h-[80px]">
+                                        <p className="text-sm text-slate-300 whitespace-pre-wrap">{detailsItem.notes || <span className="italic text-slate-600">No notes provided.</span>}</p>
+                                    </div>
+                                </div>
+                                <div className="pt-2">
+                                    <p className="text-xs text-slate-500 font-medium">Category: <span className="font-bold text-white">{detailsItem.category}</span></p>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </motion.div>
                 )}
             </AnimatePresence>
         </div>

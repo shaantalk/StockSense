@@ -14,6 +14,8 @@ export interface InventoryItem {
     addedDate?: string;
     restockedDate?: string;
     useNowDaysPrior?: number;
+    stepQty?: number;
+    notes?: string;
 }
 
 export interface ShoppingListItem {

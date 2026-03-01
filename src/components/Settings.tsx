@@ -44,6 +44,9 @@ const Settings = ({ config, onSignOut }: SettingsProps) => {
     const [showPrivacyModal, setShowPrivacyModal] = useState(false);
     const [showIntelModal, setShowIntelModal] = useState(false);
 
+    const [deleteConfig, setDeleteConfig] = useState<{ type: 'Category' | 'Shop' | 'Unit' | 'Status' | 'Member', id: string, name?: string } | null>(null);
+    const [deleting, setDeleting] = useState(false);
+
     const activeHouseholdId = localStorage.getItem('activeHouseholdId');
     const activeHousehold = config?.households.find(h => h.id === activeHouseholdId);
     const isOwner = activeHousehold?.role === 'Owner';
@@ -70,13 +73,7 @@ const Settings = ({ config, onSignOut }: SettingsProps) => {
     };
 
     const handleRemoveMember = async (email: string) => {
-        if (!confirm(`Are you sure you want to remove ${email}?`)) return;
-        try {
-            await googleApiService.removeMember(email);
-            window.location.reload();
-        } catch (e: any) {
-            alert(e.message || 'Failed to remove member');
-        }
+        setDeleteConfig({ type: 'Member', id: email, name: email });
     };
 
     const handleAddShop = async () => {
@@ -95,13 +92,7 @@ const Settings = ({ config, onSignOut }: SettingsProps) => {
     };
 
     const handleRemoveShop = async (shop: string) => {
-        if (!confirm(`Remove shop ${shop}?`)) return;
-        try {
-            await googleApiService.removeShop(shop);
-            window.location.reload();
-        } catch (e: any) {
-            alert(e.message || 'Failed to remove shop');
-        }
+        setDeleteConfig({ type: 'Shop', id: shop, name: shop });
     };
 
     const handleAddCategory = async () => {
@@ -120,13 +111,7 @@ const Settings = ({ config, onSignOut }: SettingsProps) => {
     };
 
     const handleRemoveCategory = async (catName: string) => {
-        if (!confirm(`Remove category ${catName}? Items referring to this will still keep the text value.`)) return;
-        try {
-            await googleApiService.removeCategory(catName);
-            window.location.reload();
-        } catch (e: any) {
-            alert(e.message || 'Failed to remove category');
-        }
+        setDeleteConfig({ type: 'Category', id: catName, name: catName });
     };
 
     const handleAddUnit = async () => {
@@ -144,13 +129,7 @@ const Settings = ({ config, onSignOut }: SettingsProps) => {
     };
 
     const handleRemoveUnit = async (unit: string) => {
-        if (!confirm(`Remove unit ${unit}?`)) return;
-        try {
-            await googleApiService.removeUnit(unit);
-            window.location.reload();
-        } catch (e: any) {
-            alert(e.message || 'Failed to remove unit');
-        }
+        setDeleteConfig({ type: 'Unit', id: unit, name: unit });
     };
 
     const handleAddStatus = async () => {
@@ -169,12 +148,36 @@ const Settings = ({ config, onSignOut }: SettingsProps) => {
     };
 
     const handleRemoveStatus = async (status: string) => {
-        if (!confirm(`Remove status ${status}?`)) return;
+        setDeleteConfig({ type: 'Status', id: status, name: status });
+    };
+
+    const confirmDelete = async () => {
+        if (!deleteConfig) return;
+        setDeleting(true);
         try {
-            await googleApiService.removeStatus(status);
+            switch (deleteConfig.type) {
+                case 'Category':
+                    await googleApiService.removeCategory(deleteConfig.id);
+                    break;
+                case 'Shop':
+                    await googleApiService.removeShop(deleteConfig.id);
+                    break;
+                case 'Unit':
+                    await googleApiService.removeUnit(deleteConfig.id);
+                    break;
+                case 'Status':
+                    await googleApiService.removeStatus(deleteConfig.id);
+                    break;
+                case 'Member':
+                    await googleApiService.removeMember(deleteConfig.id);
+                    break;
+            }
             window.location.reload();
         } catch (e: any) {
-            alert(e.message || 'Failed to remove status');
+            alert(e.message || `Failed to remove ${deleteConfig.type.toLowerCase()}`);
+        } finally {
+            setDeleting(false);
+            setDeleteConfig(null);
         }
     };
 
@@ -269,18 +272,18 @@ const Settings = ({ config, onSignOut }: SettingsProps) => {
                                 </div>
                             </div>
 
-                            <div className="flex flex-col gap-2">
+                            <div className="flex flex-wrap gap-2">
                                 {config?.categories.map(cat => (
-                                    <div key={cat.name} className="flex items-center justify-between bg-slate-800/50 border border-slate-700 pl-3 pr-2 py-2 rounded-xl group/cat">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: cat.color }} />
-                                            <span className="text-sm font-bold text-slate-300 tracking-wider">{cat.name}</span>
+                                    <div key={cat.name} className="flex items-center gap-2 bg-slate-800/50 border border-slate-700 pl-3 pr-1 py-1.5 rounded-xl group/cat w-fit">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cat.color }} />
+                                            <span className="text-xs font-bold text-slate-300 tracking-wider">{cat.name}</span>
                                         </div>
                                         <button
                                             onClick={() => handleRemoveCategory(cat.name)}
-                                            className="p-1.5 hover:bg-red-500/20 rounded-lg text-slate-500 hover:text-red-400 transition-colors"
+                                            className="p-1 hover:bg-red-500/20 rounded-lg text-slate-500 hover:text-red-400 transition-colors"
                                         >
-                                            <X size={14} />
+                                            <X size={12} />
                                         </button>
                                     </div>
                                 ))}
@@ -300,18 +303,18 @@ const Settings = ({ config, onSignOut }: SettingsProps) => {
                                 </div>
                             </div>
 
-                            <div className="flex flex-col gap-2">
+                            <div className="flex flex-wrap gap-2">
                                 {config?.shops.map(shop => (
-                                    <div key={shop.name} className="flex items-center justify-between bg-slate-800/50 border border-slate-700 pl-3 pr-2 py-2 rounded-xl group/shop">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-3 h-3 rounded-full border border-slate-700" style={{ backgroundColor: shop.color }} />
-                                            <span className="text-sm font-bold text-slate-300 tracking-wider">{shop.name}</span>
+                                    <div key={shop.name} className="flex items-center gap-2 bg-slate-800/50 border border-slate-700 pl-3 pr-1 py-1.5 rounded-xl group/shop w-fit">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-2.5 h-2.5 rounded-full border border-slate-700" style={{ backgroundColor: shop.color }} />
+                                            <span className="text-xs font-bold text-slate-300 tracking-wider">{shop.name}</span>
                                         </div>
                                         <button
                                             onClick={() => handleRemoveShop(shop.name)}
-                                            className="p-1.5 hover:bg-red-500/20 rounded-lg text-slate-500 hover:text-red-400 transition-colors"
+                                            className="p-1 hover:bg-red-500/20 rounded-lg text-slate-500 hover:text-red-400 transition-colors"
                                         >
-                                            <X size={14} />
+                                            <X size={12} />
                                         </button>
                                     </div>
                                 ))}
@@ -331,15 +334,15 @@ const Settings = ({ config, onSignOut }: SettingsProps) => {
                                 </div>
                             </div>
 
-                            <div className="flex flex-col gap-2">
+                            <div className="flex flex-wrap gap-2">
                                 {config?.units.map(unit => (
-                                    <div key={unit} className="flex items-center justify-between bg-slate-800/50 border border-slate-700 pl-4 pr-2 py-2 rounded-xl group/unit">
-                                        <span className="text-sm font-bold text-slate-300 tracking-wider">{unit}</span>
+                                    <div key={unit} className="flex items-center gap-2 bg-slate-800/50 border border-slate-700 pl-3 pr-1 py-1.5 rounded-xl group/unit w-fit">
+                                        <span className="text-xs font-bold text-slate-300 tracking-wider">{unit}</span>
                                         <button
                                             onClick={() => handleRemoveUnit(unit)}
-                                            className="p-1.5 hover:bg-red-500/20 rounded-lg text-slate-500 hover:text-red-400 transition-colors"
+                                            className="p-1 hover:bg-red-500/20 rounded-lg text-slate-500 hover:text-red-400 transition-colors"
                                         >
-                                            <X size={14} />
+                                            <X size={12} />
                                         </button>
                                     </div>
                                 ))}
@@ -359,18 +362,18 @@ const Settings = ({ config, onSignOut }: SettingsProps) => {
                                 </div>
                             </div>
 
-                            <div className="flex flex-col gap-2">
+                            <div className="flex flex-wrap gap-2">
                                 {config?.statuses.map(status => (
-                                    <div key={status.name} className="flex items-center justify-between bg-slate-800/50 border border-slate-700 pl-3 pr-2 py-2 rounded-xl group/status">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-3 h-3 rounded-full border border-slate-700" style={{ backgroundColor: status.color }} />
-                                            <span className="text-sm font-bold text-slate-300 tracking-wider">{status.name}</span>
+                                    <div key={status.name} className="flex items-center gap-2 bg-slate-800/50 border border-slate-700 pl-3 pr-1 py-1.5 rounded-xl group/status w-fit">
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-2.5 h-2.5 rounded-full border border-slate-700" style={{ backgroundColor: status.color }} />
+                                            <span className="text-xs font-bold text-slate-300 tracking-wider">{status.name}</span>
                                         </div>
                                         <button
                                             onClick={() => handleRemoveStatus(status.name)}
-                                            className="p-1.5 hover:bg-red-500/20 rounded-lg text-slate-500 hover:text-red-400 transition-colors"
+                                            className="p-1 hover:bg-red-500/20 rounded-lg text-slate-500 hover:text-red-400 transition-colors"
                                         >
-                                            <X size={14} />
+                                            <X size={12} />
                                         </button>
                                     </div>
                                 ))}
@@ -950,6 +953,51 @@ const Settings = ({ config, onSignOut }: SettingsProps) => {
                             >
                                 Close
                             </button>
+                        </motion.div>
+                    </motion.div>
+                )}
+
+                {/* Delete Confirmation Modal */}
+                {deleteConfig && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-[#0f172a]/90 backdrop-blur-sm"
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, y: 20 }}
+                            animate={{ scale: 1, y: 0 }}
+                            exit={{ scale: 0.9, y: 20 }}
+                            className="w-full max-w-sm glass p-8 rounded-[2.5rem] border-red-500/30 space-y-6"
+                        >
+                            <div className="text-center space-y-4">
+                                <div className="w-16 h-16 rounded-3xl bg-red-500/10 text-red-500 flex items-center justify-center mx-auto mb-2">
+                                    <X size={32} />
+                                </div>
+                                <h3 className="text-2xl font-black text-white tracking-tight">Remove {deleteConfig.type}?</h3>
+                                <p className="text-sm text-slate-300 font-medium">
+                                    Are you sure you want to remove <span className="text-white font-bold">{deleteConfig.name}</span>?
+                                    {deleteConfig.type === 'Category' || deleteConfig.type === 'Shop' || deleteConfig.type === 'Unit' || deleteConfig.type === 'Status' ? " Items referring to this will still keep the text value, but it won't appear in dropdowns." : " They will lose access to the current household."}
+                                </p>
+                            </div>
+
+                            <div className="flex gap-3 mt-6">
+                                <button
+                                    onClick={() => setDeleteConfig(null)}
+                                    disabled={deleting}
+                                    className="flex-1 h-14 rounded-2xl bg-slate-800 text-slate-400 font-bold uppercase tracking-widest text-[10px] hover:bg-slate-700 transition-all"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={confirmDelete}
+                                    disabled={deleting}
+                                    className="flex-1 h-14 rounded-2xl bg-red-500/10 text-red-500 font-black uppercase tracking-widest text-[10px] hover:bg-red-500 hover:text-white border border-red-500/20 transition-all flex items-center justify-center gap-2"
+                                >
+                                    {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Remove'}
+                                </button>
+                            </div>
                         </motion.div>
                     </motion.div>
                 )}

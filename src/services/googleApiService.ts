@@ -121,7 +121,7 @@ export const googleApiService = {
                 { range: "PurchasedItems!A1", values: [["EventID", "ItemName", "QtyBought", "PricePerUnit"]] },
                 { range: "Categories!A1", values: [["Name", "Color"], ["Grocery", "#10b981"], ["Medical", "#ef4444"], ["Electronics", "#3b82f6"], ["Household", "#f59e0b"], ["Personal", "#8b5cf6"]] },
                 { range: "Shops!A1", values: [["Name", "Color"], ["Amazon", "#f97316"], ["Blinkit", "#facc15"], ["Instamart", "#fb923c"], ["BigBasket", "#84cc16"]] },
-                { range: "Members!A1", values: [["Email", "Color"]] },
+                { range: "Members!A1", values: [["Email", "Color", "Name", "Picture", "PreferredCurrency", "IsOwner"]] },
                 { range: "Units!A1", values: [["Name"], ["Kilos"], ["Liters"], ["Grams"], ["Numbers"], ["Packets"]] },
                 { range: "Statuses!A1", values: [["Name", "Color"], ["Normal", "#10b981"], ["Near Finish", "#f59e0b"]] },
                 { range: "Settings!A1", values: [["Key", "Value"]] }
@@ -135,18 +135,18 @@ export const googleApiService = {
                 })
             });
 
-            const userEmail = localStorage.getItem('userEmail') || 'User';
+            const userInfo = await this.getUserInfo().catch(() => ({ email: localStorage.getItem('userEmail') || 'User', name: '', picture: '' }));
             await googleFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Members!A2:append?valueInputOption=RAW`, {
                 method: 'POST',
                 body: JSON.stringify({
-                    values: [[userEmail, "#3b82f6"]]
+                    values: [[userInfo.email, "#3b82f6", userInfo.name, userInfo.picture || '', "INR_India", "TRUE"]]
                 })
             });
 
             await googleFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Settings!A2:append?valueInputOption=RAW`, {
                 method: 'POST',
                 body: JSON.stringify({
-                    values: [["Currency", "₹"]]
+                    values: [["Currency", "INR_India"]]
                 })
             });
 
@@ -215,13 +215,14 @@ export const googleApiService = {
         }
     },
 
-    async getUserInfo(): Promise<{ email: string; name: string }> {
+    async getUserInfo(): Promise<{ email: string; name: string; picture?: string }> {
         const url = 'https://www.googleapis.com/oauth2/v3/userinfo';
         try {
             const data = await googleFetch(url);
             return {
                 email: data.email,
-                name: data.name || data.given_name || data.email.split('@')[0]
+                name: data.name || data.given_name || data.email.split('@')[0],
+                picture: data.picture || ''
             };
         } catch (error) {
             console.error('Failed to fetch user info:', error);
@@ -399,7 +400,7 @@ export const googleApiService = {
         }
     },
 
-    async addMember(email: string, color: string = '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0')): Promise<void> {
+    async addMember(email: string, name: string = '', defaultCurrency: string = '', color: string = '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0')): Promise<void> {
         const spreadsheetId = localStorage.getItem('activeHouseholdId');
         if (!spreadsheetId) return;
 
@@ -416,9 +417,35 @@ export const googleApiService = {
         await googleFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Members!A1:append?valueInputOption=RAW`, {
             method: 'POST',
             body: JSON.stringify({
-                values: [[email, color]]
+                values: [[email, color, name, "", defaultCurrency, "FALSE"]]
             })
         });
+    },
+
+    async updateMemberProfile(email: string, updates: Partial<import('../types').Member>): Promise<void> {
+        const spreadsheetId = localStorage.getItem('activeHouseholdId');
+        if (!spreadsheetId) return;
+
+        const data = await googleFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/Members!A:F`);
+        const rows = data.values || [];
+        const rowIndex = rows.findIndex((r: any) => r[0] === email);
+
+        if (rowIndex !== -1) {
+            const row = rows[rowIndex];
+            const updatedRow = [
+                row[0] || email,
+                updates.color || row[1] || '',
+                updates.name !== undefined ? updates.name : (row[2] || ''),
+                updates.picture !== undefined ? updates.picture : (row[3] || ''),
+                updates.preferredCurrency !== undefined ? updates.preferredCurrency : (row[4] || ''),
+                updates.isOwner !== undefined ? (updates.isOwner ? "TRUE" : "FALSE") : (row[5] || 'FALSE')
+            ];
+            const range = `Members!A${rowIndex + 1}:F${rowIndex + 1}`;
+            await googleFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?valueInputOption=RAW`, {
+                method: 'PUT',
+                body: JSON.stringify({ values: [updatedRow] })
+            });
+        }
     },
 
     async removeMember(email: string): Promise<void> {

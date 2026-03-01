@@ -4,7 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { googleApiService } from '../services/googleApiService';
 import type { ShoppingListItem, UserConfig, ShopEvent, PurchasedItem } from '../types';
 import { clsx, type ClassValue } from 'clsx';
-import { getCurrencySymbol } from '../utils/currency';
+import { getCurrencySymbol, convertCurrency, extractCode } from '../utils/currency';
+import { fetchAndCacheExchangeRates } from '../services/initService';
 import { twMerge } from 'tailwind-merge';
 
 function cn(...inputs: ClassValue[]) {
@@ -25,6 +26,30 @@ const ShoppingList = ({ config }: ShoppingListProps) => {
     const [shop, setShop] = useState('');
     const [buyer, setBuyer] = useState('');
     const [totalAmount, setTotalAmount] = useState<number>(0);
+    const [convertedTotal, setConvertedTotal] = useState<number | null>(null);
+    const [converting, setConverting] = useState(false);
+
+    const buyerObj = config?.members.find(m => m.email === buyer);
+    const buyerPrefCurrency = buyerObj?.preferredCurrency || config?.currency || 'INR';
+    const isDifferentCurrency = extractCode(buyerPrefCurrency) !== extractCode(config?.currency || 'INR');
+
+    useEffect(() => {
+        let mounted = true;
+        if (isDifferentCurrency && totalAmount > 0) {
+            setConverting(true);
+            fetchAndCacheExchangeRates().then(() => {
+                convertCurrency(totalAmount, buyerPrefCurrency, config?.currency || 'INR').then(res => {
+                    if (mounted) {
+                        setConvertedTotal(res);
+                        setConverting(false);
+                    }
+                });
+            });
+        } else {
+            setConvertedTotal(null);
+        }
+        return () => { mounted = false; };
+    }, [totalAmount, buyerPrefCurrency, config?.currency, isDifferentCurrency]);
 
     useEffect(() => {
         if (config?.activeHouseholdId) {
@@ -60,11 +85,13 @@ const ShoppingList = ({ config }: ShoppingListProps) => {
     const handleCheckout = async () => {
         if (!shop || !buyer || selectedItems.length === 0) return;
 
+        const finalAmount = (isDifferentCurrency && convertedTotal !== null) ? convertedTotal : totalAmount;
+
         const event: ShopEvent = {
             eventId: `EVT-${Date.now()}`,
             date: new Date().toISOString(),
             shopSource: shop,
-            totalAmount: totalAmount,
+            totalAmount: finalAmount,
             buyer: buyer,
             entryType: 'Summary'
         };
@@ -259,14 +286,20 @@ const ShoppingList = ({ config }: ShoppingListProps) => {
                                 <div>
                                     <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-3 block">Total Bill Amount</label>
                                     <div className="relative group">
-                                        <span className="absolute left-5 top-1/2 -translate-y-1/2 font-black text-slate-500 text-xl group-focus-within:text-primary-400">{getCurrencySymbol(config?.currency || 'INR')}</span>
+                                        <span className="absolute left-5 top-1/2 -translate-y-1/2 font-black text-slate-500 text-xl group-focus-within:text-primary-400">{getCurrencySymbol(buyerPrefCurrency)}</span>
                                         <input
                                             type="number"
-                                            value={totalAmount}
+                                            value={totalAmount || ''}
                                             onChange={(e) => setTotalAmount(Number(e.target.value))}
                                             className="w-full bg-slate-800 border-2 border-slate-700/50 rounded-[1.5rem] py-5 pl-12 pr-6 font-black text-2xl text-white focus:outline-none focus:border-primary-500/50 focus:ring-4 focus:ring-primary-500/10 transition-all"
                                         />
                                     </div>
+                                    {isDifferentCurrency && totalAmount > 0 && (
+                                        <div className="mt-3 text-xs font-bold text-accent-400 bg-accent-500/10 p-4 rounded-2xl border border-accent-500/20 flex justify-between items-center">
+                                            <span>Auto-converted to Household Currency ({extractCode(config?.currency || 'INR')})</span>
+                                            {converting ? <Loader2 size={16} className="animate-spin" /> : <span className="text-sm">{getCurrencySymbol(config?.currency || 'INR')}{convertedTotal}</span>}
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="pt-4 flex gap-4">

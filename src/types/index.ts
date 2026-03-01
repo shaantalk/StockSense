@@ -55,6 +55,9 @@ export interface Member {
     email: string;
     name: string;
     color: string;
+    picture?: string;
+    preferredCurrency?: string;
+    isOwner?: boolean;
 }
 
 export interface Status {
@@ -72,6 +75,7 @@ export interface UserConfig {
     currentUser: {
         email: string;
         name: string;
+        picture?: string;
     };
     households: Household[];
     activeHouseholdId?: string;

@@ -47,10 +47,12 @@ export async function convertCurrency(amount: number, fromCodeRaw: string, toCod
     try {
         // 1. Try to use cached USD rates if available
         const cached = localStorage.getItem('exchange_rates_USD');
-        const cachedTime = localStorage.getItem('exchange_rates_time_USD');
+        const cachedTimeStr = localStorage.getItem('exchange_rates_time_USD');
         const now = Date.now();
 
-        if (cached && cachedTime && now - parseInt(cachedTime) < 24 * 60 * 60 * 1000) {
+        const isSameDate = cachedTimeStr && new Date(now).toISOString().split('T')[0] === new Date(parseInt(cachedTimeStr)).toISOString().split('T')[0];
+
+        if (cached && isSameDate) {
             const rates = JSON.parse(cached);
             const rateFrom = rates[fromCode];
             const rateTo = rates[toCode];

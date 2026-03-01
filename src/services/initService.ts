@@ -73,10 +73,13 @@ export const fetchAndCacheExchangeRates = async (baseCurrency: string = 'USD') =
     const cacheKey = `exchange_rates_${baseCurrency}`;
     const timeKey = `exchange_rates_time_${baseCurrency}`;
     const cached = localStorage.getItem(cacheKey);
-    const cachedTime = localStorage.getItem(timeKey);
+    const cachedTimeStr = localStorage.getItem(timeKey);
     const now = Date.now();
 
-    if (cached && cachedTime && now - parseInt(cachedTime) < 24 * 60 * 60 * 1000) {
+    const isSameDate = cachedTimeStr && new Date(now).toISOString().split('T')[0] === new Date(parseInt(cachedTimeStr)).toISOString().split('T')[0];
+
+    // If we have cached rates and it was fetched today, skip refetch
+    if (cached && isSameDate) {
         return;
     }
 

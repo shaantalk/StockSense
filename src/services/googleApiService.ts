@@ -122,7 +122,7 @@ export const googleApiService = {
                 { range: "Categories!A1", values: [["Name", "Color"], ["Grocery", "#10b981"], ["Medical", "#ef4444"], ["Electronics", "#3b82f6"], ["Household", "#f59e0b"], ["Personal", "#8b5cf6"]] },
                 { range: "Shops!A1", values: [["Name", "Color"], ["Amazon", "#f97316"], ["Blinkit", "#facc15"], ["Instamart", "#fb923c"], ["BigBasket", "#84cc16"]] },
                 { range: "Members!A1", values: [["Email", "Color", "Name", "Picture", "PreferredCurrency", "IsOwner"]] },
-                { range: "Units!A1", values: [["Name"], ["Kilos"], ["Liters"], ["Grams"], ["Numbers"], ["Packets"]] },
+                { range: "Units!A1", values: [["Name"], ["Kilos"], ["Liters"], ["ML"], ["Grams"], ["Numbers"], ["Packets"], ["Pieces"], ["Bottles"], ["Boxes"], ["Cans"], ["Pounds"], ["Ounces"], ["Gallons"], ["Dozen"]] },
                 { range: "Statuses!A1", values: [["Name", "Color"], ["Stocked", "#10b981"], ["Expired", "#a855f7"], ["Low", "#ef4444"], ["Out of stock", "#6b7280"], ["Use now", "#f59e0b"]] },
                 { range: "Settings!A1", values: [["Key", "Value"]] }
             ];

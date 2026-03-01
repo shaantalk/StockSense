@@ -42,6 +42,11 @@ function App() {
       const user = await googleApiService.getUserInfo();
 
       let activeHouseholdId = localStorage.getItem('activeHouseholdId');
+      if (activeHouseholdId && !households.find(h => h.id === activeHouseholdId)) {
+        activeHouseholdId = null;
+        localStorage.removeItem('activeHouseholdId');
+      }
+
       if (!activeHouseholdId && households.length > 0) {
         activeHouseholdId = households[0].id;
         localStorage.setItem('activeHouseholdId', activeHouseholdId);

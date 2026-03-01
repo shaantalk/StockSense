@@ -247,8 +247,10 @@ export const googleApiService = {
                 });
                 return obj;
             });
-        } catch (error) {
-            console.error(`Failed to fetch ${sheetName}:`, error);
+        } catch (error: any) {
+            if (!error.message?.includes('Requested entity was not found')) {
+                console.error(`Failed to fetch ${sheetName}:`, error);
+            }
             return [];
         }
     },

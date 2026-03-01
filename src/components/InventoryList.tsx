@@ -400,27 +400,25 @@ const InventoryList = ({ config }: InventoryListProps) => {
                                     </select>
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-2 block">Expiry Date (Optional)</label>
-                                        <input
-                                            type="date"
-                                            value={newItem.expiryDate || ''}
-                                            onChange={(e) => setNewItem({ ...newItem, expiryDate: e.target.value })}
-                                            className="w-full bg-slate-900 border-2 border-slate-800 rounded-2xl h-12 px-4 text-white focus:outline-none focus:border-primary-500 transition-all text-sm font-bold"
-                                            style={{ colorScheme: 'dark' }}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-2 block">Mark 'Use Now' before (Days)</label>
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            value={newItem.useNowDaysPrior}
-                                            onChange={(e) => setNewItem({ ...newItem, useNowDaysPrior: Number(e.target.value) })}
-                                            className="w-full bg-slate-900 border-2 border-slate-800 rounded-2xl h-12 px-4 text-white focus:outline-none focus:border-primary-500 transition-all text-sm font-bold"
-                                        />
-                                    </div>
+                                <div>
+                                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-2 block">Expiry Date (Optional)</label>
+                                    <input
+                                        type="date"
+                                        value={newItem.expiryDate || ''}
+                                        onChange={(e) => setNewItem({ ...newItem, expiryDate: e.target.value })}
+                                        className="w-full bg-slate-900 border-2 border-slate-800 rounded-2xl h-12 px-4 text-white focus:outline-none focus:border-primary-500 transition-all text-sm font-bold"
+                                        style={{ colorScheme: 'dark' }}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-2 block">Mark 'Use Now' before (Days) (Optional)</label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        value={newItem.useNowDaysPrior}
+                                        onChange={(e) => setNewItem({ ...newItem, useNowDaysPrior: Number(e.target.value) })}
+                                        className="w-full bg-slate-900 border-2 border-slate-800 rounded-2xl h-12 px-4 text-white focus:outline-none focus:border-primary-500 transition-all text-sm font-bold"
+                                    />
                                 </div>
                             </div>
 

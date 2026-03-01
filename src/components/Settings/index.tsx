@@ -56,19 +56,21 @@ export default function Settings({ config, onSignOut }: SettingsProps) {
     const sharedProps = { config, isOwner, setDeleteConfig };
 
     return (
-        <div className="space-y-6 pb-24 max-w-lg mx-auto w-full pt-6">
+        <div className="pb-24 max-w-4xl mx-auto w-full pt-6 px-4 md:px-8 space-y-8">
             <ProfileSection config={config} />
             <HouseholdSection {...sharedProps} />
             <MembersSection {...sharedProps} />
             <SystemSection />
 
-            <button
-                onClick={onSignOut}
-                className="w-full h-16 rounded-3xl glass text-red-400 font-bold uppercase tracking-[0.3em] text-xs flex items-center justify-center gap-3 border-red-500/10 hover:bg-red-500/5 transition-all active:scale-95"
-            >
-                <LogOut size={18} />
-                Sign Out Securely
-            </button>
+            <div className="pt-4">
+                <button
+                    onClick={onSignOut}
+                    className="w-full max-w-md mx-auto h-16 rounded-3xl glass text-red-400 font-bold uppercase tracking-[0.3em] text-[10px] md:text-xs flex items-center justify-center gap-3 border-red-500/10 hover:bg-red-500/5 transition-all active:scale-95"
+                >
+                    <LogOut size={18} />
+                    Sign Out Securely
+                </button>
+            </div>
 
             {/* Delete Confirmation Modal */}
             <AnimatePresence>

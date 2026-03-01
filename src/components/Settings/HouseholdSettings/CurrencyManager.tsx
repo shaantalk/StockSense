@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { DollarSign, Loader2, CheckCircle2, Search, ChevronDown } from 'lucide-react';
 import { SettingItem } from '../SettingItem';
@@ -22,6 +22,22 @@ export const CurrencyManager = ({ config }: Pick<SharedSettingsProps, 'config'>)
     const [currencies, setCurrencies] = useState<CurrencyData[]>([]);
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const dropdownRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setDropdownOpen(false);
+            }
+        };
+
+        if (dropdownOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [dropdownOpen]);
 
     const filteredCurrencies = currencies.filter(c =>
         c.countryName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -96,7 +112,7 @@ export const CurrencyManager = ({ config }: Pick<SharedSettingsProps, 'config'>)
                                 <p className="text-xs text-slate-400 font-medium">Select your household's currency.</p>
                             </div>
 
-                            <div className="relative">
+                            <div className="relative" ref={dropdownRef}>
                                 <button
                                     onClick={() => setDropdownOpen(!dropdownOpen)}
                                     className="w-full bg-slate-900 border-2 border-slate-800 rounded-2xl h-14 px-4 text-white flex items-center justify-between hover:border-primary-500/50 transition-all font-bold"

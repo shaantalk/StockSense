@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Home, Package, List as ListIcon, ShoppingCart, Settings as SettingsIcon, Loader2 } from 'lucide-react';
+import { Home, Package, List as ListIcon, ShoppingCart, Settings as SettingsIcon, Loader2, LogOut } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import InventoryList from './components/InventoryList';
 import ShoppingList from './components/ShoppingList';
@@ -17,8 +17,22 @@ function App() {
   const [config, setConfig] = useState<UserConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [showLogout, setShowLogout] = useState(false);
+  const logoutRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (logoutRef.current && !logoutRef.current.contains(event.target as Node)) {
+        setShowLogout(false);
+      }
+    };
+    if (showLogout) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showLogout]);
 
   useEffect(() => {
     const initAuth = async () => {
@@ -158,11 +172,14 @@ function App() {
     <div className="min-h-screen bg-[#0f172a] pb-24 text-slate-200 selection:bg-primary-500/30">
       {/* Dynamic Header */}
       <header className="p-6 flex items-center justify-between sticky top-0 z-30 bg-[#0f172a]/80 backdrop-blur-xl border-b border-white/5">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-primary-600 flex items-center justify-center text-white shadow-lg shadow-primary-500/20">
+        <div
+          className="flex items-center gap-2 cursor-pointer group"
+          onClick={() => navigate('/')}
+        >
+          <div className="w-8 h-8 rounded-lg bg-primary-600 flex items-center justify-center text-white shadow-lg shadow-primary-500/20 group-hover:scale-105 transition-transform">
             <Package size={18} />
           </div>
-          <span className="font-black text-xl tracking-tighter text-white">StockSense</span>
+          <span className="font-black text-xl tracking-tighter text-white group-hover:text-primary-400 transition-colors">StockSense</span>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex flex-col items-end mr-1">
@@ -170,12 +187,46 @@ function App() {
               {config?.households.find(h => h.id === localStorage.getItem('activeHouseholdId'))?.name || 'Loading...'}
             </span>
           </div>
-          <div className="w-10 h-10 rounded-full border-2 border-primary-500/20 p-0.5 bg-slate-900 group cursor-pointer hover:border-primary-500 transition-all">
-            <img
-              src={`https://ui-avatars.com/api/?name=${encodeURIComponent(config?.currentUser?.name || 'U')}&background=0ea5e9&color=fff`}
-              alt="User"
-              className="w-full h-full rounded-full"
-            />
+          <div className="relative" ref={logoutRef}>
+            <div
+              className="w-10 h-10 rounded-full border-2 border-primary-500/20 p-0.5 bg-slate-900 group cursor-pointer hover:border-primary-500 transition-all"
+              onClick={() => setShowLogout(!showLogout)}
+            >
+              <img
+                src={`https://ui-avatars.com/api/?name=${encodeURIComponent(config?.currentUser?.name || 'U')}&background=0ea5e9&color=fff`}
+                alt="User"
+                className="w-full h-full rounded-full"
+              />
+            </div>
+
+            <AnimatePresence>
+              {showLogout && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                  className="absolute top-full mt-3 right-0 w-48 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden z-50 flex flex-col"
+                >
+                  <div className="p-3 border-b border-slate-800 flex flex-col items-center gap-1">
+                    <span className="text-white font-bold text-sm truncate w-full text-center">{config?.currentUser?.name || 'User'}</span>
+                    <span className="text-[10px] text-slate-500 truncate w-full text-center font-bold tracking-widest">{config?.currentUser?.email}</span>
+                  </div>
+                  <div className="p-1">
+                    <button
+                      onClick={() => {
+                        localStorage.removeItem('google_access_token');
+                        setIsAuthenticated(false);
+                        navigate('/');
+                      }}
+                      className="w-full flex items-center justify-center gap-3 px-3 py-2.5 rounded-xl text-red-500 hover:bg-red-500/10 transition-colors text-xs font-black uppercase tracking-widest"
+                    >
+                      <LogOut size={16} />
+                      Sign Out
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
       </header>

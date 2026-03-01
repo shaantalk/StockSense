@@ -51,6 +51,14 @@ export interface Category {
     color: string;
 }
 
+export interface WastageEvent {
+    eventId: string;
+    date: string;
+    itemName: string;
+    qtyWasted: number;
+    reason: string;
+}
+
 export interface Shop {
     name: string;
     color: string;

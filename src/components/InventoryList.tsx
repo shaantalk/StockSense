@@ -75,22 +75,16 @@ const InventoryList = ({ config }: InventoryListProps) => {
     };
 
     const handleAddToWishlist = async (item: InventoryItem) => {
-        let updatedItem = item;
-        let requiresInventoryUpdate = false;
-
-        if (item.status === 'Expired') {
-            updatedItem = { ...item, currentQty: 0, status: 'Out of stock' };
-            requiresInventoryUpdate = true;
-        }
-
-        // Optimistic update
-        setItems(prev => prev.map(i =>
-            i.itemName === item.itemName ? updatedItem : i
-        ));
-
         try {
-            if (requiresInventoryUpdate) {
-                await googleApiService.updateInventoryItem(updatedItem);
+            // First log wastage if item is Expired
+            if (item.status === 'Expired' && item.currentQty > 0) {
+                await googleApiService.logWastageEvent({
+                    eventId: `WST-${Date.now()}`,
+                    date: new Date().toISOString(),
+                    itemName: item.itemName,
+                    qtyWasted: item.currentQty,
+                    reason: "Expired"
+                });
             }
 
             // Add to Shopping List
@@ -100,11 +94,22 @@ const InventoryList = ({ config }: InventoryListProps) => {
                 priority: 'Medium'
             });
 
+            // Update item: set currentQty to 0 and status to "Out of stock"
+            const updatedItem = {
+                ...item,
+                currentQty: 0,
+                status: 'Out of stock' as const
+            };
+
+            // Optimistic update
+            setItems(prev => prev.map(i =>
+                i.itemName === item.itemName ? updatedItem : i
+            ));
+
+            await googleApiService.updateInventoryItem(updatedItem);
             fetchInventory();
         } catch (e) {
             console.error("Failed to add to wish list:", e);
-            alert("Failed to add to wish list");
-            fetchInventory(); // Revert
         }
     };
 

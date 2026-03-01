@@ -101,7 +101,7 @@ export const googleApiService = {
             const ssUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}`;
             const ss = await googleFetch(ssUrl);
 
-            const sheets = ["Inventory", "ShoppingList", "ShopEvents", "PurchasedItems", "Categories", "Shops", "Members", "Units", "Statuses", "Settings"];
+            const sheets = ["Inventory", "ShoppingList", "ShopEvents", "PurchasedItems", "Categories", "Shops", "Members", "Units", "Statuses", "Settings", "WastageEvents"];
             const requests = sheets.map(s => ({ addSheet: { properties: { title: s } } }));
 
             await googleFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
@@ -124,7 +124,8 @@ export const googleApiService = {
                 { range: "Members!A1", values: [["Email", "Color", "Name", "Picture", "PreferredCurrency", "IsOwner"]] },
                 { range: "Units!A1", values: [["Name"], ["Kilos"], ["Liters"], ["ML"], ["Grams"], ["Numbers"], ["Packets"], ["Pieces"], ["Bottles"], ["Boxes"], ["Cans"], ["Pounds"], ["Ounces"], ["Gallons"], ["Dozen"]] },
                 { range: "Statuses!A1", values: [["Name", "Color"], ["Stocked", "#10b981"], ["Expired", "#a855f7"], ["Low", "#ef4444"], ["Out of stock", "#6b7280"], ["Use now", "#f59e0b"]] },
-                { range: "Settings!A1", values: [["Key", "Value"]] }
+                { range: "Settings!A1", values: [["Key", "Value"]] },
+                { range: "WastageEvents!A1", values: [["EventID", "Date", "ItemName", "QtyWasted", "Reason"]] }
             ];
 
             await googleFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchUpdate`, {
@@ -419,6 +420,24 @@ export const googleApiService = {
                     body: JSON.stringify({ values: [[newQty]] })
                 });
             }
+        }
+    },
+
+    async logWastageEvent(event: { eventId: string; date: string; itemName: string; qtyWasted: number; reason: string }): Promise<void> {
+        const spreadsheetId = localStorage.getItem('activeHouseholdId');
+        if (!spreadsheetId) return;
+
+        // Ensure the sheet exists, if not, it will fail silently here, but we can attempt to add the row.
+        try {
+            await googleFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/WastageEvents!A1:append?valueInputOption=RAW`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    values: [[event.eventId, event.date, event.itemName, event.qtyWasted, event.reason]]
+                })
+            });
+        } catch (e: any) {
+            // For older households that don't have the sheet, we log the error but don't strictly crash the app.
+            console.warn("Could not log wastage event. The 'WastageEvents' sheet may be missing.", e);
         }
     },
 

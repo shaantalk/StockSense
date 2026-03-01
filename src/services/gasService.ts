@@ -19,17 +19,96 @@ const handleResponse = async (response: Response) => {
     return data;
 };
 
+// Helper for Family-scoped requests
+const activeFamilyId = () => localStorage.getItem('activeFamilyId');
+const userEmail = () => localStorage.getItem('userEmail') || 'Guest@ecosystem.com';
+
 export const gasService = {
+    /**
+     * Fetch user configuration (shops, members, families)
+     */
+    async getConfig(): Promise<UserConfig> {
+        try {
+            const familyId = activeFamilyId();
+            const email = userEmail();
+            let url = `${BASE_URL}?action=getConfig&userEmail=${encodeURIComponent(email)}`;
+            if (familyId) url += `&familyId=${familyId}`;
+
+            const response = await fetch(url);
+            return await handleResponse(response);
+        } catch (error) {
+            console.error('Failed to fetch config:', error);
+            return { shops: [], members: [], currentUser: { email: '', name: 'Guest' }, families: [] };
+        }
+    },
+
+    /**
+     * Create a new family sheet
+     */
+    async createFamily(name: string): Promise<{ familyId: string }> {
+        try {
+            const response = await fetch(BASE_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({ action: 'createFamily', name, userEmail: userEmail() })
+            });
+            return await handleResponse(response);
+        } catch (error) {
+            console.error('Failed to create family:', error);
+            throw error;
+        }
+    },
+
+    /**
+     * Invite a member to the active family
+     */
+    async addMember(email: string): Promise<void> {
+        const familyId = activeFamilyId();
+        if (!familyId) return;
+        try {
+            const response = await fetch(BASE_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({ action: 'addMember', email, familyId, userEmail: userEmail() })
+            });
+            await handleResponse(response);
+        } catch (error) {
+            console.error('Failed to add member:', error);
+            throw error;
+        }
+    },
+
+    /**
+     * Remove a member from the active family
+     */
+    async removeMember(email: string): Promise<void> {
+        const familyId = activeFamilyId();
+        if (!familyId) return;
+        try {
+            const response = await fetch(BASE_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({ action: 'removeMember', email, familyId, userEmail: userEmail() })
+            });
+            await handleResponse(response);
+        } catch (error) {
+            console.error('Failed to remove member:', error);
+            throw error;
+        }
+    },
+
     /**
      * Fetch current inventory levels
      */
     async getInventory(): Promise<InventoryItem[]> {
+        const familyId = activeFamilyId();
+        if (!familyId) return [];
         try {
-            const response = await fetch(`${BASE_URL}?action=getInventory`);
+            const response = await fetch(`${BASE_URL}?action=getInventory&familyId=${familyId}&userEmail=${encodeURIComponent(userEmail())}`);
             return await handleResponse(response);
         } catch (error) {
             console.error('Failed to fetch inventory:', error);
-            return []; // Return empty on error
+            return [];
         }
     },
 
@@ -37,8 +116,10 @@ export const gasService = {
      * Fetch items currently in the shopping list
      */
     async getShoppingList(): Promise<ShoppingListItem[]> {
+        const familyId = activeFamilyId();
+        if (!familyId) return [];
         try {
-            const response = await fetch(`${BASE_URL}?action=getShoppingList`);
+            const response = await fetch(`${BASE_URL}?action=getShoppingList&familyId=${familyId}&userEmail=${encodeURIComponent(userEmail())}`);
             return await handleResponse(response);
         } catch (error) {
             console.error('Failed to fetch shopping list:', error);
@@ -47,15 +128,17 @@ export const gasService = {
     },
 
     /**
-     * Fetch user configuration (shops, members)
+     * Fetch dashboard stats (spend, etc)
      */
-    async getConfig(): Promise<UserConfig> {
+    async getDashboardStats(): Promise<{ weeklySpend: number }> {
+        const familyId = activeFamilyId();
+        if (!familyId) return { weeklySpend: 0 };
         try {
-            const response = await fetch(`${BASE_URL}?action=getConfig`);
+            const response = await fetch(`${BASE_URL}?action=getDashboardStats&familyId=${familyId}&userEmail=${encodeURIComponent(userEmail())}`);
             return await handleResponse(response);
         } catch (error) {
-            console.error('Failed to fetch config:', error);
-            return { shops: [], members: [], currentUser: { email: '', name: 'Guest' } };
+            console.error('Failed to fetch dashboard stats:', error);
+            return { weeklySpend: 0 };
         }
     },
 
@@ -63,11 +146,13 @@ export const gasService = {
      * Flag an item as "Near Finish" and add to shopping list
      */
     async setNearFinish(itemName: string): Promise<void> {
+        const familyId = activeFamilyId();
+        if (!familyId) return;
         try {
             const response = await fetch(BASE_URL, {
                 method: 'POST',
-                headers: { 'Content-Type': 'text/plain' }, // Using text/plain to avoid CORS preflight if possible with GAS
-                body: JSON.stringify({ action: 'setNearFinish', itemName })
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({ action: 'setNearFinish', itemName, familyId, userEmail: userEmail() })
             });
             await handleResponse(response);
         } catch (error) {
@@ -79,11 +164,13 @@ export const gasService = {
      * Log a purchase event and update inventory
      */
     async logPurchase(event: ShopEvent, items: PurchasedItem[]): Promise<void> {
+        const familyId = activeFamilyId();
+        if (!familyId) return;
         try {
             const response = await fetch(BASE_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'text/plain' },
-                body: JSON.stringify({ action: 'logPurchase', event, items })
+                body: JSON.stringify({ action: 'logPurchase', event, items, familyId, userEmail: userEmail() })
             });
             await handleResponse(response);
         } catch (error) {
@@ -95,8 +182,10 @@ export const gasService = {
      * Fetch shop history events
      */
     async getShopEvents(): Promise<ShopEvent[]> {
+        const familyId = activeFamilyId();
+        if (!familyId) return [];
         try {
-            const response = await fetch(`${BASE_URL}?action=getShopEvents`);
+            const response = await fetch(`${BASE_URL}?action=getShopEvents&familyId=${familyId}&userEmail=${encodeURIComponent(userEmail())}`);
             return await handleResponse(response);
         } catch (error) {
             console.error('Failed to fetch shop events:', error);

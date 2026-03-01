@@ -34,6 +34,12 @@ export interface PurchasedItem {
     pricePerUnit: number;
 }
 
+export interface Family {
+    id: string; // Spreadsheet ID
+    name: string;
+    role: 'Owner' | 'Member';
+}
+
 export interface UserConfig {
     shops: string[];
     members: string[];
@@ -41,4 +47,6 @@ export interface UserConfig {
         email: string;
         name: string;
     };
+    families: Family[];
+    activeFamilyId?: string;
 }

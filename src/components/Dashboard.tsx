@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { TrendingDown, ShoppingBag, ChevronRight, ArrowUpRight } from 'lucide-react';
+import { TrendingDown, ShoppingBag, ChevronRight, ArrowUpRight, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { gasService } from '../services/gasService';
 import type { InventoryItem, ShoppingListItem, UserConfig } from '../types';
@@ -9,25 +9,42 @@ const Dashboard = () => {
     const [inventory, setInventory] = useState<InventoryItem[]>([]);
     const [shoppingList, setShoppingList] = useState<ShoppingListItem[]>([]);
     const [config, setConfig] = useState<UserConfig | null>(null);
-    const [_loading, setLoading] = useState(true);
+    const [stats, setStats] = useState({ weeklySpend: 0 });
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const fetchData = async () => {
             setLoading(true);
-            const [inv, shop, cfg] = await Promise.all([
-                gasService.getInventory(),
-                gasService.getShoppingList(),
-                gasService.getConfig()
-            ]);
-            setInventory(inv);
-            setShoppingList(shop);
-            setConfig(cfg);
-            setLoading(false);
+            try {
+                const [inv, shop, cfg, dashboardStats] = await Promise.all([
+                    gasService.getInventory(),
+                    gasService.getShoppingList(),
+                    gasService.getConfig(),
+                    gasService.getDashboardStats()
+                ]);
+                setInventory(inv);
+                setShoppingList(shop);
+                setConfig(cfg);
+                setStats(dashboardStats);
+            } catch (e) {
+                console.error("Dashboard fetch error:", e);
+            } finally {
+                setLoading(false);
+            }
         };
         fetchData();
     }, []);
 
     const nearFinishCount = inventory.filter(i => i.status === 'Near Finish').length;
+
+    if (loading) {
+        return (
+            <div className="h-[60vh] flex flex-col items-center justify-center gap-4">
+                <Loader2 className="w-10 h-10 text-primary-500 animate-spin" />
+                <p className="text-slate-500 font-black uppercase tracking-[0.3em] text-[10px]">Synchronizing Kitchen</p>
+            </div>
+        );
+    }
 
     const StatCard = ({ title, value, icon: Icon, color, delay }: any) => (
         <motion.div
@@ -48,7 +65,7 @@ const Dashboard = () => {
     );
 
     return (
-        <div className="space-y-8 animate-fade-in">
+        <div className="space-y-8 animate-fade-in pb-10">
             <div className="flex flex-col gap-1">
                 <h1 className="text-2xl font-bold text-white">Hello, {config?.currentUser?.name || 'User'}! 👋</h1>
                 <p className="text-slate-400 font-medium text-sm">Here's what's happening in your kitchen.</p>
@@ -111,7 +128,7 @@ const Dashboard = () => {
                     </div>
                     <div className="flex items-end justify-between">
                         <div className="flex flex-col">
-                            <span className="text-3xl font-black text-white tracking-tighter">₹4,250</span>
+                            <span className="text-3xl font-black text-white tracking-tighter">₹{stats.weeklySpend.toLocaleString()}</span>
                             <span className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em]">Spent this week</span>
                         </div>
                         <div className="flex -space-x-3">

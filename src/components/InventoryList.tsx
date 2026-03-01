@@ -307,6 +307,7 @@ const InventoryList = ({ config }: InventoryListProps) => {
                 onAdd={handleAddItem}
                 adding={adding}
                 config={config}
+                existingItems={items}
             />
 
             <StatusChangeModal

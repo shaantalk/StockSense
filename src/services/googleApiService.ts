@@ -230,7 +230,7 @@ export const googleApiService = {
     },
 
     async getTableData(sheetName: string): Promise<any[]> {
-        const spreadsheetId = localStorage.getItem('activeFamilyId');
+        const spreadsheetId = localStorage.getItem('activeHouseholdId');
         if (!spreadsheetId) return [];
 
         try {
@@ -288,7 +288,7 @@ export const googleApiService = {
      * CRUD Operations
      */
     async updateInventoryItem(item: Partial<InventoryItem>): Promise<void> {
-        const spreadsheetId = localStorage.getItem('activeFamilyId');
+        const spreadsheetId = localStorage.getItem('activeHouseholdId');
         if (!spreadsheetId) return;
 
         // 1. Find the row index
@@ -317,7 +317,7 @@ export const googleApiService = {
     },
 
     async addShoppingItem(item: ShoppingListItem): Promise<void> {
-        const spreadsheetId = localStorage.getItem('activeFamilyId');
+        const spreadsheetId = localStorage.getItem('activeHouseholdId');
         if (!spreadsheetId) return;
 
         await googleFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/ShoppingList!A1:append?valueInputOption=RAW`, {
@@ -329,7 +329,7 @@ export const googleApiService = {
     },
 
     async removeShoppingItem(itemName: string): Promise<void> {
-        const spreadsheetId = localStorage.getItem('activeFamilyId');
+        const spreadsheetId = localStorage.getItem('activeHouseholdId');
         if (!spreadsheetId) return;
 
         // Note: Sheets API doesn't have a direct "delete row by value". 
@@ -361,7 +361,7 @@ export const googleApiService = {
     },
 
     async logPurchase(event: ShopEvent, items: PurchasedItem[]): Promise<void> {
-        const spreadsheetId = localStorage.getItem('activeFamilyId');
+        const spreadsheetId = localStorage.getItem('activeHouseholdId');
         if (!spreadsheetId) return;
 
         // 1. Log Event
@@ -400,7 +400,7 @@ export const googleApiService = {
     },
 
     async addMember(email: string, color: string = '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0')): Promise<void> {
-        const spreadsheetId = localStorage.getItem('activeFamilyId');
+        const spreadsheetId = localStorage.getItem('activeHouseholdId');
         if (!spreadsheetId) return;
 
         // 1. Add Drive Permission
@@ -422,7 +422,7 @@ export const googleApiService = {
     },
 
     async removeMember(email: string): Promise<void> {
-        const spreadsheetId = localStorage.getItem('activeFamilyId');
+        const spreadsheetId = localStorage.getItem('activeHouseholdId');
         if (!spreadsheetId) return;
 
         // 1. Find Permission ID

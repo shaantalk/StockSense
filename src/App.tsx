@@ -74,7 +74,7 @@ function App() {
 
         shops = shopsData.map((s: any) => ({ name: s.name, color: s.color || '#94a3b8' })).filter((s: any) => s.name);
         categories = categoriesData.map((c: any) => ({ name: c.name, color: c.color })).filter((c: any) => c.name);
-        members = membersData.map((m: any) => ({ email: m.email, color: m.color || '#94a3b8' })).filter((m: any) => m.email);
+        members = membersData.map((m: any) => ({ email: m.email, name: m.name || m.email?.split('@')[0] || 'User', color: m.color || '#94a3b8' })).filter((m: any) => m.email);
         units = unitsData.map((u: any) => u.name).filter(Boolean);
         statuses = statusesData.map((s: any) => ({ name: s.name, color: s.color || '#94a3b8' })).filter((s: any) => s.name);
 
@@ -82,7 +82,7 @@ function App() {
         const legacyShops = configData.filter((c: any) => c.type === 'Shop').map((c: any) => ({ name: c.value, color: '#94a3b8' }));
         if (legacyShops.length > 0 && shops.length === 0) shops = legacyShops;
 
-        const legacyMembers = configData.filter((c: any) => c.type === 'Member').map((c: any) => ({ email: c.value, color: '#94a3b8' }));
+        const legacyMembers = configData.filter((c: any) => c.type === 'Member').map((c: any) => ({ email: c.value, name: c.value?.split('@')[0] || 'User', color: '#94a3b8' }));
         if (legacyMembers.length > 0 && members.length === 0) members = legacyMembers;
 
         if (units.length === 0) units = ['Kilos', 'Liters', 'Grams', 'Numbers', 'Packets'];

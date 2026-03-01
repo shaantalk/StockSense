@@ -12,6 +12,7 @@ interface SettingsProps {
 const Settings = ({ config, onSignOut }: SettingsProps) => {
     const [showInviteModal, setShowInviteModal] = useState(false);
     const [inviteEmail, setInviteEmail] = useState('');
+    const [inviteName, setInviteName] = useState('');
     const [inviteLoading, setInviteLoading] = useState(false);
 
     const [newShop, setNewShop] = useState('');
@@ -33,6 +34,13 @@ const Settings = ({ config, onSignOut }: SettingsProps) => {
     const [currencyInput, setCurrencyInput] = useState(config?.currency || '₹');
     const [currencyLoading, setCurrencyLoading] = useState(false);
 
+    const [showHouseholdModal, setShowHouseholdModal] = useState(false);
+
+    const [showAddShop, setShowAddShop] = useState(false);
+    const [showAddCategory, setShowAddCategory] = useState(false);
+    const [showAddUnit, setShowAddUnit] = useState(false);
+    const [showAddStatus, setShowAddStatus] = useState(false);
+
     const activeHouseholdId = localStorage.getItem('activeHouseholdId');
     const activeHousehold = config?.households.find(h => h.id === activeHouseholdId);
     const isOwner = activeHousehold?.role === 'Owner';
@@ -43,16 +51,16 @@ const Settings = ({ config, onSignOut }: SettingsProps) => {
     };
 
     const handleInvite = async () => {
-        if (!inviteEmail) return;
+        if (!inviteEmail || !inviteName) return;
         setInviteLoading(true);
         try {
-            await googleApiService.addMember(inviteEmail);
+            await googleApiService.addMember(inviteEmail, inviteName);
             setShowInviteModal(false);
             setInviteEmail('');
-            alert('Member added and shared successfully!');
+            setInviteName('');
             window.location.reload();
         } catch (e: any) {
-            alert(e.message || 'Failed to add member');
+            alert(e.message || 'Failed to invite member');
         } finally {
             setInviteLoading(false);
         }
@@ -223,44 +231,22 @@ const Settings = ({ config, onSignOut }: SettingsProps) => {
                 </div>
             </section>
 
-            {/* Household Switcher */}
-            <section className="space-y-4">
-                <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-600 px-4">Switch Household</h2>
-                <div className="grid gap-3">
-                    {config?.households.map((household) => (
-                        <div
-                            key={household.id}
-                            onClick={() => handleSwitchHousehold(household.id)}
-                            className={`glass p-5 rounded-3xl flex items-center justify-between group cursor-pointer transition-all border-2 ${activeHouseholdId === household.id ? 'border-primary-500/50 bg-primary-500/5' : 'border-slate-700/50'}`}
-                        >
-                            <div className="flex items-center gap-4">
-                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${activeHouseholdId === household.id ? 'bg-primary-500/20 text-primary-400' : 'bg-slate-800 text-slate-400'}`}>
-                                    <Home size={20} />
-                                </div>
-                                <div className="flex flex-col">
-                                    <span className={`text-sm font-bold uppercase tracking-wider ${activeHouseholdId === household.id ? 'text-white' : 'text-slate-400'}`}>{household.name}</span>
-                                    <span className="text-[10px] text-slate-500 font-black uppercase tracking-widest mt-0.5">{household.role}</span>
-                                </div>
-                            </div>
-                            {activeHouseholdId === household.id && (
-                                <div className="w-2 h-2 rounded-full bg-primary-500 shadow-lg shadow-primary-500/50 animate-pulse" />
-                            )}
-                        </div>
-                    ))}
-                    <button
-                        onClick={() => window.location.hash = '/onboarding'}
-                        className="w-full p-5 rounded-3xl border-2 border-dashed border-slate-700 text-slate-500 hover:border-slate-500 hover:text-slate-400 flex items-center justify-center gap-2 transition-all font-bold text-xs uppercase tracking-widest"
-                    >
-                        <UserPlus size={16} />
-                        Add or Join New Household
-                    </button>
-                </div>
+            {/* Household Switcher Modal Trigger */}
+            <section className="space-y-4 px-2">
+                <SettingItem
+                    icon={Home}
+                    label="Switch Household"
+                    value={activeHousehold?.name || 'Loading...'}
+                    color="bg-primary-500/20 text-primary-400"
+                    onClick={() => setShowHouseholdModal(true)}
+                    delay={0.05}
+                />
             </section>
 
             {/* Household Config */}
             {isOwner && (
                 <section className="space-y-4">
-                    <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-600 px-4">Configuration</h2>
+                    <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-600 px-4">Household Settings</h2>
                     <div className="grid gap-4">
                         <SettingItem
                             icon={DollarSign}
@@ -280,45 +266,26 @@ const Settings = ({ config, onSignOut }: SettingsProps) => {
                                 </div>
                             </div>
 
-                            <div className="flex flex-wrap gap-2">
+                            <div className="flex flex-col gap-2">
                                 {config?.categories.map(cat => (
-                                    <div key={cat.name} className="flex items-center gap-2 bg-slate-800/50 border border-slate-700 pl-2 pr-2 py-1 rounded-full group/cat">
-                                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: cat.color }} />
-                                        <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">{cat.name}</span>
+                                    <div key={cat.name} className="flex items-center justify-between bg-slate-800/50 border border-slate-700 pl-3 pr-2 py-2 rounded-xl group/cat">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: cat.color }} />
+                                            <span className="text-sm font-bold text-slate-300 tracking-wider">{cat.name}</span>
+                                        </div>
                                         <button
                                             onClick={() => handleRemoveCategory(cat.name)}
-                                            className="p-1 hover:bg-red-500/20 rounded-full text-slate-500 hover:text-red-400 transition-colors"
+                                            className="p-1.5 hover:bg-red-500/20 rounded-lg text-slate-500 hover:text-red-400 transition-colors"
                                         >
-                                            <X size={12} />
+                                            <X size={14} />
                                         </button>
                                     </div>
                                 ))}
                             </div>
 
-                            <div className="flex gap-2">
-                                <input
-                                    type="color"
-                                    value={newCategoryColor}
-                                    onChange={(e) => setNewCategoryColor(e.target.value)}
-                                    className="w-10 h-10 rounded-xl bg-slate-900 border-2 border-slate-800 p-0.5 cursor-pointer flex-shrink-0"
-                                    title="Choose Category Color"
-                                />
-                                <input
-                                    type="text"
-                                    value={newCategory}
-                                    onChange={(e) => setNewCategory(e.target.value)}
-                                    placeholder="New category..."
-                                    className="flex-1 bg-slate-900 border-2 border-slate-800 rounded-xl h-10 px-4 text-white focus:outline-none focus:border-primary-500 transition-all text-xs font-bold w-full"
-                                />
-                                <button
-                                    disabled={!newCategory.trim() || addingCategory}
-                                    onClick={handleAddCategory}
-                                    className="h-10 px-4 rounded-xl bg-slate-800 text-white font-bold text-xs uppercase hover:bg-slate-700 transition-all disabled:opacity-50 flex items-center gap-2 flex-shrink-0"
-                                >
-                                    {addingCategory ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-                                    Add
-                                </button>
-                            </div>
+                            <button onClick={() => setShowAddCategory(true)} className="w-full py-3 rounded-xl border border-dashed border-slate-700 text-slate-400 hover:text-primary-400 hover:border-primary-500/50 hover:bg-primary-500/5 transition-all text-xs font-bold tracking-widest uppercase flex items-center justify-center gap-2">
+                                <Plus size={14} /> Add New Category
+                            </button>
                         </div>
 
                         {/* Shops Manager */}
@@ -330,45 +297,26 @@ const Settings = ({ config, onSignOut }: SettingsProps) => {
                                 </div>
                             </div>
 
-                            <div className="flex flex-wrap gap-2">
+                            <div className="flex flex-col gap-2">
                                 {config?.shops.map(shop => (
-                                    <div key={shop.name} className="flex items-center gap-2 bg-slate-800/50 border border-slate-700 pl-2 pr-2 py-1 rounded-full group/shop">
-                                        <div className="w-3 h-3 rounded-full border border-slate-700" style={{ backgroundColor: shop.color }} />
-                                        <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">{shop.name}</span>
+                                    <div key={shop.name} className="flex items-center justify-between bg-slate-800/50 border border-slate-700 pl-3 pr-2 py-2 rounded-xl group/shop">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-3 h-3 rounded-full border border-slate-700" style={{ backgroundColor: shop.color }} />
+                                            <span className="text-sm font-bold text-slate-300 tracking-wider">{shop.name}</span>
+                                        </div>
                                         <button
                                             onClick={() => handleRemoveShop(shop.name)}
-                                            className="p-1 hover:bg-red-500/20 rounded-full text-slate-500 hover:text-red-400 transition-colors"
+                                            className="p-1.5 hover:bg-red-500/20 rounded-lg text-slate-500 hover:text-red-400 transition-colors"
                                         >
-                                            <X size={12} />
+                                            <X size={14} />
                                         </button>
                                     </div>
                                 ))}
                             </div>
 
-                            <div className="flex gap-2">
-                                <input
-                                    type="color"
-                                    value={newShopColor}
-                                    onChange={(e) => setNewShopColor(e.target.value)}
-                                    className="w-10 h-10 rounded-xl bg-slate-900 border-2 border-slate-800 p-0.5 cursor-pointer flex-shrink-0"
-                                    title="Choose Shop Color"
-                                />
-                                <input
-                                    type="text"
-                                    value={newShop}
-                                    onChange={(e) => setNewShop(e.target.value)}
-                                    placeholder="Add new shop..."
-                                    className="flex-1 bg-slate-900 border-2 border-slate-800 rounded-xl h-10 px-4 text-white focus:outline-none focus:border-primary-500 transition-all text-xs font-bold min-w-0"
-                                />
-                                <button
-                                    disabled={!newShop.trim() || addingShop}
-                                    onClick={handleAddShop}
-                                    className="h-10 px-4 rounded-xl bg-slate-800 text-white font-bold text-xs uppercase hover:bg-slate-700 transition-all disabled:opacity-50 flex items-center gap-2 flex-shrink-0"
-                                >
-                                    {addingShop ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-                                    Add
-                                </button>
-                            </div>
+                            <button onClick={() => setShowAddShop(true)} className="w-full py-3 rounded-xl border border-dashed border-slate-700 text-slate-400 hover:text-primary-400 hover:border-primary-500/50 hover:bg-primary-500/5 transition-all text-xs font-bold tracking-widest uppercase flex items-center justify-center gap-2">
+                                <Plus size={14} /> Add New Shop
+                            </button>
                         </div>
 
                         {/* Units Manager */}
@@ -380,37 +328,23 @@ const Settings = ({ config, onSignOut }: SettingsProps) => {
                                 </div>
                             </div>
 
-                            <div className="flex flex-wrap gap-2">
+                            <div className="flex flex-col gap-2">
                                 {config?.units.map(unit => (
-                                    <div key={unit} className="flex items-center gap-2 bg-slate-800/50 border border-slate-700 pl-3 pr-2 py-1 rounded-full group/unit">
-                                        <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">{unit}</span>
+                                    <div key={unit} className="flex items-center justify-between bg-slate-800/50 border border-slate-700 pl-4 pr-2 py-2 rounded-xl group/unit">
+                                        <span className="text-sm font-bold text-slate-300 tracking-wider">{unit}</span>
                                         <button
                                             onClick={() => handleRemoveUnit(unit)}
-                                            className="p-1 hover:bg-red-500/20 rounded-full text-slate-500 hover:text-red-400 transition-colors"
+                                            className="p-1.5 hover:bg-red-500/20 rounded-lg text-slate-500 hover:text-red-400 transition-colors"
                                         >
-                                            <X size={12} />
+                                            <X size={14} />
                                         </button>
                                     </div>
                                 ))}
                             </div>
 
-                            <div className="flex gap-2">
-                                <input
-                                    type="text"
-                                    value={newUnit}
-                                    onChange={(e) => setNewUnit(e.target.value)}
-                                    placeholder="Add new unit (e.g. Boxes)..."
-                                    className="flex-1 bg-slate-900 border-2 border-slate-800 rounded-xl h-10 px-4 text-white focus:outline-none focus:border-primary-500 transition-all text-xs font-bold min-w-0"
-                                />
-                                <button
-                                    disabled={!newUnit.trim() || addingUnit}
-                                    onClick={handleAddUnit}
-                                    className="h-10 px-4 rounded-xl bg-slate-800 text-white font-bold text-xs uppercase hover:bg-slate-700 transition-all disabled:opacity-50 flex items-center gap-2 flex-shrink-0"
-                                >
-                                    {addingUnit ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-                                    Add
-                                </button>
-                            </div>
+                            <button onClick={() => setShowAddUnit(true)} className="w-full py-3 rounded-xl border border-dashed border-slate-700 text-slate-400 hover:text-primary-400 hover:border-primary-500/50 hover:bg-primary-500/5 transition-all text-xs font-bold tracking-widest uppercase flex items-center justify-center gap-2">
+                                <Plus size={14} /> Add New Unit
+                            </button>
                         </div>
 
                         {/* Statuses Manager */}
@@ -422,45 +356,26 @@ const Settings = ({ config, onSignOut }: SettingsProps) => {
                                 </div>
                             </div>
 
-                            <div className="flex flex-wrap gap-2">
+                            <div className="flex flex-col gap-2">
                                 {config?.statuses.map(status => (
-                                    <div key={status.name} className="flex items-center gap-2 bg-slate-800/50 border border-slate-700 pl-2 pr-2 py-1 rounded-full group/status">
-                                        <div className="w-3 h-3 rounded-full border border-slate-700" style={{ backgroundColor: status.color }} />
-                                        <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">{status.name}</span>
+                                    <div key={status.name} className="flex items-center justify-between bg-slate-800/50 border border-slate-700 pl-3 pr-2 py-2 rounded-xl group/status">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-3 h-3 rounded-full border border-slate-700" style={{ backgroundColor: status.color }} />
+                                            <span className="text-sm font-bold text-slate-300 tracking-wider">{status.name}</span>
+                                        </div>
                                         <button
                                             onClick={() => handleRemoveStatus(status.name)}
-                                            className="p-1 hover:bg-red-500/20 rounded-full text-slate-500 hover:text-red-400 transition-colors"
+                                            className="p-1.5 hover:bg-red-500/20 rounded-lg text-slate-500 hover:text-red-400 transition-colors"
                                         >
-                                            <X size={12} />
+                                            <X size={14} />
                                         </button>
                                     </div>
                                 ))}
                             </div>
 
-                            <div className="flex gap-2">
-                                <input
-                                    type="color"
-                                    value={newStatusColor}
-                                    onChange={(e) => setNewStatusColor(e.target.value)}
-                                    className="w-10 h-10 rounded-xl bg-slate-900 border-2 border-slate-800 p-0.5 cursor-pointer flex-shrink-0"
-                                    title="Choose Status Color"
-                                />
-                                <input
-                                    type="text"
-                                    value={newStatus}
-                                    onChange={(e) => setNewStatus(e.target.value)}
-                                    placeholder="Add new status..."
-                                    className="flex-1 bg-slate-900 border-2 border-slate-800 rounded-xl h-10 px-4 text-white focus:outline-none focus:border-primary-500 transition-all text-xs font-bold min-w-0"
-                                />
-                                <button
-                                    disabled={!newStatus.trim() || addingStatus}
-                                    onClick={handleAddStatus}
-                                    className="h-10 px-4 rounded-xl bg-slate-800 text-white font-bold text-xs uppercase hover:bg-slate-700 transition-all disabled:opacity-50 flex items-center gap-2 flex-shrink-0"
-                                >
-                                    {addingStatus ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-                                    Add
-                                </button>
-                            </div>
+                            <button onClick={() => setShowAddStatus(true)} className="w-full py-3 rounded-xl border border-dashed border-slate-700 text-slate-400 hover:text-primary-400 hover:border-primary-500/50 hover:bg-primary-500/5 transition-all text-xs font-bold tracking-widest uppercase flex items-center justify-center gap-2">
+                                <Plus size={14} /> Add New Status
+                            </button>
                         </div>
                     </div>
                 </section>
@@ -474,25 +389,36 @@ const Settings = ({ config, onSignOut }: SettingsProps) => {
                             <Users size={18} />
                             <span className="text-xs font-black uppercase tracking-widest">Active Members</span>
                         </div>
-                        <div className="flex flex-wrap gap-2">
-                            {config?.members.map(member => (
-                                <div key={member.email} className="flex items-center gap-2 bg-slate-800/50 border border-slate-700 pl-1 pr-3 py-1 rounded-full group/member">
-                                    <img
-                                        src={`https://ui-avatars.com/api/?name=${encodeURIComponent(member.email)}&background=${member.color.substring(1)}&color=fff&size=64`}
-                                        alt={member.email}
-                                        className="w-6 h-6 rounded-full"
-                                    />
-                                    <span className="text-[10px] font-bold text-slate-300">{member.email.split('@')[0]}</span>
-                                    {isOwner && member.email !== config?.currentUser?.email && (
-                                        <button
-                                            onClick={() => handleRemoveMember(member.email)}
-                                            className="p-0.5 hover:bg-red-500/20 rounded-full text-slate-500 hover:text-red-400 transition-colors"
-                                        >
-                                            <X size={10} />
-                                        </button>
-                                    )}
-                                </div>
-                            ))}
+                        <div className="flex flex-col gap-2">
+                            {(() => {
+                                const sortedMembers = config?.members ? [...config.members].sort((a, b) => {
+                                    if (a.email === config?.currentUser?.email) return -1;
+                                    if (b.email === config?.currentUser?.email) return 1;
+                                    return 0;
+                                }) : [];
+
+                                return sortedMembers.map((member, index) => (
+                                    <div key={member.email} className={`flex items-center justify-between bg-slate-800/50 border border-slate-700 pl-2 pr-2 py-2 rounded-xl group/member ${index === 0 ? 'ring-1 ring-primary-500/50 bg-primary-500/5' : ''}`}>
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-full shadow-lg flex items-center justify-center font-bold text-white text-lg border-2 border-slate-700" style={{ backgroundColor: member.color, textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>
+                                                {member.name.charAt(0).toUpperCase()}
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <span className="text-sm font-bold text-slate-200">{member.name}</span>
+                                                <span className="text-[10px] text-slate-500 font-bold tracking-widest">{member.email} • <span className="uppercase text-primary-400 font-black">{index === 0 ? 'Owner (You)' : 'Member'}</span></span>
+                                            </div>
+                                        </div>
+                                        {isOwner && member.email !== config?.currentUser?.email && (
+                                            <button
+                                                onClick={() => handleRemoveMember(member.email)}
+                                                className="p-1.5 hover:bg-red-500/20 rounded-lg text-slate-500 hover:text-red-400 transition-colors"
+                                            >
+                                                <X size={14} />
+                                            </button>
+                                        )}
+                                    </div>
+                                ));
+                            })()}
                         </div>
                     </div>
 
@@ -554,16 +480,25 @@ const Settings = ({ config, onSignOut }: SettingsProps) => {
                                     <Share2 size={32} />
                                 </div>
                                 <h3 className="text-xl font-black text-white tracking-tight">Invite Member</h3>
-                                <p className="text-xs text-slate-400 font-medium">Enter their Google email to grant access to this household's sheet.</p>
+                                <p className="text-xs text-slate-400 font-medium">Add a new member to this household.</p>
                             </div>
 
-                            <input
-                                type="email"
-                                placeholder="google-user@gmail.com"
-                                value={inviteEmail}
-                                onChange={(e) => setInviteEmail(e.target.value)}
-                                className="w-full bg-slate-900 border-2 border-slate-800 rounded-2xl h-14 px-6 text-white focus:outline-none focus:border-primary-500 transition-all text-sm font-bold"
-                            />
+                            <div className="space-y-3">
+                                <input
+                                    type="text"
+                                    placeholder="Display Name"
+                                    value={inviteName}
+                                    onChange={(e) => setInviteName(e.target.value)}
+                                    className="w-full bg-slate-900 border-2 border-slate-800 rounded-2xl h-14 px-6 text-white focus:outline-none focus:border-primary-500 transition-all text-sm font-bold"
+                                />
+                                <input
+                                    type="email"
+                                    placeholder="google-user@gmail.com"
+                                    value={inviteEmail}
+                                    onChange={(e) => setInviteEmail(e.target.value)}
+                                    className="w-full bg-slate-900 border-2 border-slate-800 rounded-2xl h-14 px-6 text-white focus:outline-none focus:border-primary-500 transition-all text-sm font-bold"
+                                />
+                            </div>
 
                             <div className="flex gap-3">
                                 <button
@@ -573,11 +508,243 @@ const Settings = ({ config, onSignOut }: SettingsProps) => {
                                     Cancel
                                 </button>
                                 <button
-                                    disabled={!inviteEmail || inviteLoading}
+                                    disabled={!inviteEmail || !inviteName || inviteLoading}
                                     onClick={handleInvite}
                                     className="flex-1 h-14 rounded-2xl bg-primary-600 text-white font-black uppercase tracking-widest text-[10px] shadow-lg shadow-primary-500/20 hover:bg-primary-500 transition-all flex items-center justify-center gap-2"
                                 >
                                     {inviteLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><CheckCircle2 size={16} /> Send</>}
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+
+                {/* Add Category Modal */}
+                {showAddCategory && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-[#0f172a]/90 backdrop-blur-sm"
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, y: 20 }}
+                            animate={{ scale: 1, y: 0 }}
+                            exit={{ scale: 0.9, y: 20 }}
+                            className="w-full max-w-sm glass p-8 rounded-[2.5rem] border-primary-500/30 space-y-6"
+                        >
+                            <div className="text-center space-y-2">
+                                <div className="w-16 h-16 rounded-3xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center mx-auto mb-4">
+                                    <Tags size={32} />
+                                </div>
+                                <h3 className="text-xl font-black text-white tracking-tight">Add Category</h3>
+                                <p className="text-xs text-slate-400 font-medium">Create a new category for your items.</p>
+                            </div>
+
+                            <div className="flex gap-4 items-center">
+                                <div className="relative">
+                                    <input
+                                        type="color"
+                                        value={newCategoryColor}
+                                        onChange={(e) => setNewCategoryColor(e.target.value)}
+                                        className="w-14 h-14 rounded-2xl bg-slate-900 border-2 border-slate-800 p-1 cursor-pointer absolute opacity-0 z-10"
+                                        title="Choose Category Color"
+                                    />
+                                    <div className="w-14 h-14 rounded-2xl border-2 border-slate-700 shadow-inner flex items-center justify-center pointer-events-none" style={{ backgroundColor: newCategoryColor }} />
+                                </div>
+                                <input
+                                    type="text"
+                                    value={newCategory}
+                                    onChange={(e) => setNewCategory(e.target.value)}
+                                    placeholder="Category Name"
+                                    className="flex-1 bg-slate-900 border-2 border-slate-800 rounded-2xl h-14 px-4 text-white focus:outline-none focus:border-primary-500 transition-all text-sm font-bold w-full"
+                                />
+                            </div>
+
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setShowAddCategory(false)}
+                                    className="flex-1 h-14 rounded-2xl bg-slate-800 text-slate-400 font-bold uppercase tracking-widest text-[10px] hover:bg-slate-700 transition-all"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    disabled={!newCategory.trim() || addingCategory}
+                                    onClick={handleAddCategory}
+                                    className="flex-1 h-14 rounded-2xl bg-emerald-600 text-white font-black uppercase tracking-widest text-[10px] shadow-lg shadow-emerald-500/20 hover:bg-emerald-500 transition-all flex items-center justify-center gap-2"
+                                >
+                                    {addingCategory ? <Loader2 className="w-4 h-4 animate-spin" /> : <><CheckCircle2 size={16} /> Save</>}
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+
+                {/* Add Shop Modal */}
+                {showAddShop && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-[#0f172a]/90 backdrop-blur-sm"
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, y: 20 }}
+                            animate={{ scale: 1, y: 0 }}
+                            exit={{ scale: 0.9, y: 20 }}
+                            className="w-full max-w-sm glass p-8 rounded-[2.5rem] border-primary-500/30 space-y-6"
+                        >
+                            <div className="text-center space-y-2">
+                                <div className="w-16 h-16 rounded-3xl bg-orange-500/10 text-orange-400 flex items-center justify-center mx-auto mb-4">
+                                    <Store size={32} />
+                                </div>
+                                <h3 className="text-xl font-black text-white tracking-tight">Add Shop</h3>
+                                <p className="text-xs text-slate-400 font-medium">Add a new store or branch.</p>
+                            </div>
+
+                            <div className="flex gap-4 items-center">
+                                <div className="relative">
+                                    <input
+                                        type="color"
+                                        value={newShopColor}
+                                        onChange={(e) => setNewShopColor(e.target.value)}
+                                        className="w-14 h-14 rounded-2xl bg-slate-900 border-2 border-slate-800 p-1 cursor-pointer absolute opacity-0 z-10"
+                                        title="Choose Shop Color"
+                                    />
+                                    <div className="w-14 h-14 rounded-2xl border-2 border-slate-700 shadow-inner flex items-center justify-center pointer-events-none" style={{ backgroundColor: newShopColor }} />
+                                </div>
+                                <input
+                                    type="text"
+                                    value={newShop}
+                                    onChange={(e) => setNewShop(e.target.value)}
+                                    placeholder="Shop Name"
+                                    className="flex-1 bg-slate-900 border-2 border-slate-800 rounded-2xl h-14 px-4 text-white focus:outline-none focus:border-primary-500 transition-all text-sm font-bold w-full"
+                                />
+                            </div>
+
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setShowAddShop(false)}
+                                    className="flex-1 h-14 rounded-2xl bg-slate-800 text-slate-400 font-bold uppercase tracking-widest text-[10px] hover:bg-slate-700 transition-all"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    disabled={!newShop.trim() || addingShop}
+                                    onClick={handleAddShop}
+                                    className="flex-1 h-14 rounded-2xl bg-orange-600 text-white font-black uppercase tracking-widest text-[10px] shadow-lg shadow-orange-500/20 hover:bg-orange-500 transition-all flex items-center justify-center gap-2"
+                                >
+                                    {addingShop ? <Loader2 className="w-4 h-4 animate-spin" /> : <><CheckCircle2 size={16} /> Save</>}
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+
+                {/* Add Unit Modal */}
+                {showAddUnit && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-[#0f172a]/90 backdrop-blur-sm"
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, y: 20 }}
+                            animate={{ scale: 1, y: 0 }}
+                            exit={{ scale: 0.9, y: 20 }}
+                            className="w-full max-w-sm glass p-8 rounded-[2.5rem] border-primary-500/30 space-y-6"
+                        >
+                            <div className="text-center space-y-2">
+                                <div className="w-16 h-16 rounded-3xl bg-purple-500/10 text-purple-400 flex items-center justify-center mx-auto mb-4">
+                                    <Scale size={32} />
+                                </div>
+                                <h3 className="text-xl font-black text-white tracking-tight">Add Unit</h3>
+                                <p className="text-xs text-slate-400 font-medium">Add a new measurement unit (e.g. Kg, Box).</p>
+                            </div>
+
+                            <input
+                                type="text"
+                                value={newUnit}
+                                onChange={(e) => setNewUnit(e.target.value)}
+                                placeholder="Unit Name"
+                                className="w-full bg-slate-900 border-2 border-slate-800 rounded-2xl h-14 px-4 text-white focus:outline-none focus:border-primary-500 transition-all text-sm font-bold"
+                            />
+
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setShowAddUnit(false)}
+                                    className="flex-1 h-14 rounded-2xl bg-slate-800 text-slate-400 font-bold uppercase tracking-widest text-[10px] hover:bg-slate-700 transition-all"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    disabled={!newUnit.trim() || addingUnit}
+                                    onClick={handleAddUnit}
+                                    className="flex-1 h-14 rounded-2xl bg-purple-600 text-white font-black uppercase tracking-widest text-[10px] shadow-lg shadow-purple-500/20 hover:bg-purple-500 transition-all flex items-center justify-center gap-2"
+                                >
+                                    {addingUnit ? <Loader2 className="w-4 h-4 animate-spin" /> : <><CheckCircle2 size={16} /> Save</>}
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+
+                {/* Add Status Modal */}
+                {showAddStatus && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-[#0f172a]/90 backdrop-blur-sm"
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, y: 20 }}
+                            animate={{ scale: 1, y: 0 }}
+                            exit={{ scale: 0.9, y: 20 }}
+                            className="w-full max-w-sm glass p-8 rounded-[2.5rem] border-primary-500/30 space-y-6"
+                        >
+                            <div className="text-center space-y-2">
+                                <div className="w-16 h-16 rounded-3xl bg-blue-500/10 text-blue-400 flex items-center justify-center mx-auto mb-4">
+                                    <Activity size={32} />
+                                </div>
+                                <h3 className="text-xl font-black text-white tracking-tight">Add Status</h3>
+                                <p className="text-xs text-slate-400 font-medium">Add a new item status level.</p>
+                            </div>
+
+                            <div className="flex gap-4 items-center">
+                                <div className="relative">
+                                    <input
+                                        type="color"
+                                        value={newStatusColor}
+                                        onChange={(e) => setNewStatusColor(e.target.value)}
+                                        className="w-14 h-14 rounded-2xl bg-slate-900 border-2 border-slate-800 p-1 cursor-pointer absolute opacity-0 z-10"
+                                        title="Choose Status Color"
+                                    />
+                                    <div className="w-14 h-14 rounded-2xl border-2 border-slate-700 shadow-inner flex items-center justify-center pointer-events-none" style={{ backgroundColor: newStatusColor }} />
+                                </div>
+                                <input
+                                    type="text"
+                                    value={newStatus}
+                                    onChange={(e) => setNewStatus(e.target.value)}
+                                    placeholder="Status Name"
+                                    className="flex-1 bg-slate-900 border-2 border-slate-800 rounded-2xl h-14 px-4 text-white focus:outline-none focus:border-primary-500 transition-all text-sm font-bold w-full"
+                                />
+                            </div>
+
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setShowAddStatus(false)}
+                                    className="flex-1 h-14 rounded-2xl bg-slate-800 text-slate-400 font-bold uppercase tracking-widest text-[10px] hover:bg-slate-700 transition-all"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    disabled={!newStatus.trim() || addingStatus}
+                                    onClick={handleAddStatus}
+                                    className="flex-1 h-14 rounded-2xl bg-blue-600 text-white font-black uppercase tracking-widest text-[10px] shadow-lg shadow-blue-500/20 hover:bg-blue-500 transition-all flex items-center justify-center gap-2"
+                                >
+                                    {addingStatus ? <Loader2 className="w-4 h-4 animate-spin" /> : <><CheckCircle2 size={16} /> Save</>}
                                 </button>
                             </div>
                         </motion.div>
@@ -647,6 +814,59 @@ const Settings = ({ config, onSignOut }: SettingsProps) => {
                                     {currencyLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><CheckCircle2 size={16} /> Save</>}
                                 </button>
                             </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+
+                {showHouseholdModal && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-[#0f172a]/90 backdrop-blur-sm"
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, y: 20 }}
+                            animate={{ scale: 1, y: 0 }}
+                            exit={{ scale: 0.9, y: 20 }}
+                            className="w-full max-w-sm glass p-6 rounded-[2.5rem] border-primary-500/30 space-y-6 max-h-[80vh] overflow-y-auto"
+                        >
+                            <div className="flex items-center justify-between mb-2">
+                                <h3 className="text-xl font-black text-white tracking-tight flex items-center gap-2">
+                                    <Home size={24} className="text-primary-400" /> Switch Household
+                                </h3>
+                                <button onClick={() => setShowHouseholdModal(false)} className="text-slate-500 hover:text-white">
+                                    <X size={24} />
+                                </button>
+                            </div>
+
+                            <div className="grid gap-3">
+                                {config?.households.map((household) => (
+                                    <div
+                                        key={household.id}
+                                        onClick={() => handleSwitchHousehold(household.id)}
+                                        className={`p-4 rounded-2xl flex items-center justify-between group cursor-pointer transition-all border-2 ${activeHouseholdId === household.id ? 'border-primary-500 bg-primary-500/10' : 'border-slate-800 bg-slate-900/50 hover:border-slate-700 hover:bg-slate-800'}`}
+                                    >
+                                        <div className="flex flex-col">
+                                            <span className={`text-sm font-bold uppercase tracking-wider ${activeHouseholdId === household.id ? 'text-white' : 'text-slate-300'}`}>{household.name}</span>
+                                            <span className="text-[10px] text-slate-500 font-black uppercase tracking-widest mt-0.5">{household.role}</span>
+                                        </div>
+                                        {activeHouseholdId === household.id && (
+                                            <CheckCircle2 size={18} className="text-primary-500" />
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+
+                            <button
+                                onClick={() => {
+                                    setShowHouseholdModal(false);
+                                    window.location.hash = '/onboarding';
+                                }}
+                                className="w-full p-4 rounded-2xl border-2 border-dashed border-slate-700 text-slate-500 hover:border-slate-500 hover:text-slate-400 flex items-center justify-center gap-2 transition-all font-bold text-xs uppercase tracking-widest"
+                            >
+                                <UserPlus size={16} /> Add / Join Household
+                            </button>
                         </motion.div>
                     </motion.div>
                 )}

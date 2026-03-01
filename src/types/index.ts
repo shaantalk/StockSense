@@ -53,6 +53,7 @@ export interface Shop {
 
 export interface Member {
     email: string;
+    name: string;
     color: string;
 }
 

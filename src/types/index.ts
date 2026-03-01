@@ -1,5 +1,5 @@
-export type Unit = 'Kilos' | 'Liters' | 'Grams' | 'Numbers' | 'Packets';
-export type ItemStatus = 'Normal' | 'Near Finish';
+export type Unit = string;
+export type ItemStatus = string;
 export type Priority = 'Low' | 'Medium' | 'High';
 export type EntryType = 'Summary' | 'Itemized';
 
@@ -34,19 +34,43 @@ export interface PurchasedItem {
     pricePerUnit: number;
 }
 
-export interface Family {
+export interface Household {
     id: string; // Spreadsheet ID
     name: string;
     role: 'Owner' | 'Member';
 }
 
+export interface Category {
+    name: string;
+    color: string;
+}
+
+export interface Shop {
+    name: string;
+    color: string;
+}
+
+export interface Member {
+    email: string;
+    color: string;
+}
+
+export interface Status {
+    name: string;
+    color: string;
+}
+
 export interface UserConfig {
-    shops: string[];
-    members: string[];
+    categories: Category[];
+    shops: Shop[];
+    members: Member[];
+    units: string[];
+    statuses: Status[];
+    currency: string;
     currentUser: {
         email: string;
         name: string;
     };
-    families: Family[];
-    activeFamilyId?: string;
+    households: Household[];
+    activeHouseholdId?: string;
 }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ClipboardList, CheckCircle2, ShoppingBag, User, Store, ChevronRight, PackageCheck, Trash2, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { gasService } from '../services/gasService';
+import { googleApiService } from '../services/googleApiService';
 import type { ShoppingListItem, UserConfig, ShopEvent, PurchasedItem } from '../types';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -10,9 +10,12 @@ function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
 }
 
-const ShoppingList = () => {
+interface ShoppingListProps {
+    config: UserConfig | null;
+}
+
+const ShoppingList = ({ config }: ShoppingListProps) => {
     const [list, setList] = useState<ShoppingListItem[]>([]);
-    const [config, setConfig] = useState<UserConfig | null>(null);
     const [loading, setLoading] = useState(true);
     const [selectedItems, setSelectedItems] = useState<string[]>([]);
     const [showCheckout, setShowCheckout] = useState(false);
@@ -23,20 +26,26 @@ const ShoppingList = () => {
     const [totalAmount, setTotalAmount] = useState<number>(0);
 
     useEffect(() => {
-        fetchData();
-    }, []);
+        if (config?.activeHouseholdId) {
+            fetchData();
+        }
+    }, [config?.activeHouseholdId]);
+
+    useEffect(() => {
+        if (config?.shops?.[0]) setShop(config.shops[0].name);
+        if (config?.members?.[0]) setBuyer(config.members[0].email);
+    }, [config]);
 
     const fetchData = async () => {
         setLoading(true);
-        const [shopData, configData] = await Promise.all([
-            gasService.getShoppingList(),
-            gasService.getConfig()
-        ]);
-        setList(shopData);
-        setConfig(configData);
-        if (configData.shops.length > 0) setShop(configData.shops[0]);
-        if (configData.members.length > 0) setBuyer(configData.members[0]);
-        setLoading(false);
+        try {
+            const shopData = await googleApiService.getShoppingList();
+            setList(shopData);
+        } catch (e) {
+            console.error("Failed to fetch shopping list:", e);
+        } finally {
+            setLoading(false);
+        }
     };
 
     const toggleItem = (itemName: string) => {
@@ -66,17 +75,28 @@ const ShoppingList = () => {
             pricePerUnit: 0
         }));
 
-        await gasService.logPurchase(event, items);
-        setSelectedItems([]);
-        setShowCheckout(false);
-        setTotalAmount(0);
-        fetchData();
+        try {
+            await googleApiService.logPurchase(event, items);
+
+            // Remove items from shopping list
+            for (const name of selectedItems) {
+                await googleApiService.removeShoppingItem(name);
+            }
+
+            setSelectedItems([]);
+            setShowCheckout(false);
+            setTotalAmount(0);
+            fetchData();
+        } catch (e) {
+            console.error("Checkout failed:", e);
+            alert("Failed to complete purchase logging");
+        }
     };
 
     return (
         <div className="space-y-6 animate-fade-in pb-20">
             <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-bold text-white">Shopping List</h1>
+                <h1 className="text-2xl font-bold text-white">Wish List</h1>
                 <div className="flex items-center gap-2">
                     <span className="text-xs font-black text-primary-400 bg-primary-500/10 px-3 py-1.5 rounded-xl uppercase tracking-wider">
                         {list.length} Items
@@ -200,15 +220,16 @@ const ShoppingList = () => {
                                     <div className="grid grid-cols-2 gap-3">
                                         {config?.shops.map(s => (
                                             <button
-                                                key={s}
-                                                onClick={() => setShop(s)}
+                                                key={s.name}
+                                                onClick={() => setShop(s.name)}
                                                 className={cn(
                                                     "px-4 py-4 rounded-2xl text-sm font-bold flex items-center gap-3 transition-all border",
-                                                    shop === s ? "bg-primary-600 border-primary-500 text-white shadow-lg shadow-primary-500/20" : "bg-slate-800/50 text-slate-400 border-slate-700/50 hover:border-slate-600"
+                                                    shop === s.name ? "bg-primary-600 border-primary-500 text-white shadow-lg shadow-primary-500/20" : "bg-slate-800/50 text-slate-400 border-slate-700/50 hover:border-slate-600"
                                                 )}
+                                                style={shop === s.name ? {} : { borderColor: `${s.color}50`, color: s.color }}
                                             >
                                                 <Store size={18} />
-                                                {s}
+                                                {s.name}
                                             </button>
                                         ))}
                                     </div>
@@ -219,15 +240,16 @@ const ShoppingList = () => {
                                     <div className="grid grid-cols-2 gap-3">
                                         {config?.members.map(m => (
                                             <button
-                                                key={m}
-                                                onClick={() => setBuyer(m)}
+                                                key={m.email}
+                                                onClick={() => setBuyer(m.email)}
                                                 className={cn(
                                                     "px-4 py-4 rounded-2xl text-sm font-bold flex items-center gap-3 transition-all border",
-                                                    buyer === m ? "bg-accent-600 border-accent-500 text-white shadow-lg shadow-accent-500/20" : "bg-slate-800/50 text-slate-400 border-slate-700/50 hover:border-slate-600"
+                                                    buyer === m.email ? "bg-accent-600 border-accent-500 text-white shadow-lg shadow-accent-500/20" : "bg-slate-800/50 text-slate-400 border-slate-700/50 hover:border-slate-600"
                                                 )}
+                                                style={buyer === m.email ? {} : { borderColor: `${m.color}50`, color: m.color }}
                                             >
                                                 <User size={18} />
-                                                {m}
+                                                {m.email.split('@')[0]}
                                             </button>
                                         ))}
                                     </div>
@@ -236,7 +258,7 @@ const ShoppingList = () => {
                                 <div>
                                     <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-3 block">Total Bill Amount</label>
                                     <div className="relative group">
-                                        <span className="absolute left-5 top-1/2 -translate-y-1/2 font-black text-slate-500 text-xl group-focus-within:text-primary-400">₹</span>
+                                        <span className="absolute left-5 top-1/2 -translate-y-1/2 font-black text-slate-500 text-xl group-focus-within:text-primary-400">{config?.currency || '₹'}</span>
                                         <input
                                             type="number"
                                             value={totalAmount}

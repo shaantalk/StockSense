@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Home, Package, List as ListIcon, ShoppingCart, Settings as SettingsIcon, Loader2 } from 'lucide-react';
 import Dashboard from './components/Dashboard';
@@ -9,8 +9,8 @@ import Settings from './components/Settings';
 import Checkout from './components/Checkout';
 import Login from './components/Login';
 import Onboarding from './components/Onboarding';
-import { gasService } from './services/gasService';
-import type { UserConfig } from './types';
+import { googleApiService } from './services/googleApiService';
+import type { UserConfig, Shop, Member, Status } from './types';
 
 function App() {
   const [config, setConfig] = useState<UserConfig | null>(null);
@@ -21,8 +21,8 @@ function App() {
 
   useEffect(() => {
     const initAuth = async () => {
-      const savedAuth = localStorage.getItem('isActive');
-      if (savedAuth === 'true') {
+      const token = localStorage.getItem('google_access_token');
+      if (token) {
         setIsAuthenticated(true);
         await loadConfig();
       } else {
@@ -35,41 +35,100 @@ function App() {
   const loadConfig = async () => {
     setLoading(true);
     try {
-      const cfg = await gasService.getConfig();
-      setConfig(cfg);
+      // 1. Discover households
+      const households = await googleApiService.discoverHouseholds();
 
-      if (cfg.families.length === 0) {
+      // 2. Get User Info
+      const user = await googleApiService.getUserInfo();
+
+      let activeHouseholdId = localStorage.getItem('activeHouseholdId');
+      if (!activeHouseholdId && households.length > 0) {
+        activeHouseholdId = households[0].id;
+        localStorage.setItem('activeHouseholdId', activeHouseholdId);
+      }
+
+      let shops: Shop[] = [];
+      let categories: { name: string; color: string }[] = [];
+      let members: Member[] = [];
+      let units: string[] = [];
+      let statuses: Status[] = [];
+      let currency = '₹'; // Default
+
+      if (activeHouseholdId) {
+        const fetchSafe = async (sheet: string) => {
+          try { return await googleApiService.getTableData(sheet); } catch { return []; }
+        };
+
+        const configData = await fetchSafe('Config');
+        const settingsData = await fetchSafe('Settings');
+        const shopsData = await fetchSafe('Shops');
+        const categoriesData = await fetchSafe('Categories');
+        const membersData = await fetchSafe('Members');
+        const unitsData = await fetchSafe('Units');
+        const statusesData = await fetchSafe('Statuses');
+
+        shops = shopsData.map((s: any) => ({ name: s.name, color: s.color || '#94a3b8' })).filter((s: any) => s.name);
+        categories = categoriesData.map((c: any) => ({ name: c.name, color: c.color })).filter((c: any) => c.name);
+        members = membersData.map((m: any) => ({ email: m.email, color: m.color || '#94a3b8' })).filter((m: any) => m.email);
+        units = unitsData.map((u: any) => u.name).filter(Boolean);
+        statuses = statusesData.map((s: any) => ({ name: s.name, color: s.color || '#94a3b8' })).filter((s: any) => s.name);
+
+        // Fallbacks
+        const legacyShops = configData.filter((c: any) => c.type === 'Shop').map((c: any) => ({ name: c.value, color: '#94a3b8' }));
+        if (legacyShops.length > 0 && shops.length === 0) shops = legacyShops;
+
+        const legacyMembers = configData.filter((c: any) => c.type === 'Member').map((c: any) => ({ email: c.value, color: '#94a3b8' }));
+        if (legacyMembers.length > 0 && members.length === 0) members = legacyMembers;
+
+        if (units.length === 0) units = ['Kilos', 'Liters', 'Grams', 'Numbers', 'Packets'];
+        if (statuses.length === 0) statuses = [{ name: 'Normal', color: '#10b981' }, { name: 'Near Finish', color: '#f59e0b' }];
+
+        const currencyEntry = settingsData.find((c: any) => c.key === 'Currency') || configData.find((c: any) => c.type === 'Currency');
+        if (currencyEntry) currency = currencyEntry.value;
+      }
+
+      setConfig({
+        households,
+        currentUser: user,
+        categories,
+        shops,
+        members,
+        units,
+        statuses,
+        currency,
+        activeHouseholdId: activeHouseholdId || undefined
+      });
+
+      if (households.length === 0 && location.pathname !== '/onboarding') {
         navigate('/onboarding');
-      } else if (!localStorage.getItem('activeFamilyId')) {
-        // Default to first family if none selected
-        localStorage.setItem('activeFamilyId', cfg.families[0].id);
-        // Refresh config with active family items
-        const updatedCfg = await gasService.getConfig();
-        setConfig(updatedCfg);
       }
     } catch (error) {
       console.error('Failed to load config:', error);
+      // If unauthorized, clear token and redirect to login
+      if (error instanceof Error && error.message.includes('Unauthorized')) {
+        localStorage.removeItem('google_access_token');
+        setIsAuthenticated(false);
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  const handleLogin = () => {
-    localStorage.setItem('isActive', 'true');
+  const handleLogin = (_token: string, _user: { email: string; name: string }) => {
     setIsAuthenticated(true);
     loadConfig();
     navigate('/');
   };
 
-  const handleCreateFamily = async (name: string) => {
-    const result = await gasService.createFamily(name);
-    localStorage.setItem('activeFamilyId', result.familyId);
+  const handleCreateHousehold = async (name: string) => {
+    const householdId = await googleApiService.createHousehold(name);
+    localStorage.setItem('activeHouseholdId', householdId);
     await loadConfig();
     navigate('/');
   };
 
-  const handleJoinFamily = (id: string) => {
-    localStorage.setItem('activeFamilyId', id);
+  const handleJoinHousehold = (id: string) => {
+    localStorage.setItem('activeHouseholdId', id);
     loadConfig();
     navigate('/');
   };
@@ -99,7 +158,7 @@ function App() {
         <div className="flex items-center gap-3">
           <div className="flex flex-col items-end mr-1">
             <span className="text-[10px] font-black uppercase tracking-widest text-primary-400">
-              {config?.families.find(f => f.id === localStorage.getItem('activeFamilyId'))?.name || 'Loading...'}
+              {config?.households.find(h => h.id === localStorage.getItem('activeHouseholdId'))?.name || 'Loading...'}
             </span>
           </div>
           <div className="w-10 h-10 rounded-full border-2 border-primary-500/20 p-0.5 bg-slate-900 group cursor-pointer hover:border-primary-500 transition-all">
@@ -115,18 +174,22 @@ function App() {
       <main className="max-w-screen-xl mx-auto px-6 py-4">
         <AnimatePresence mode="wait">
           <Routes location={location} key={location.pathname}>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/inventory" element={<InventoryList />} />
-            <Route path="/list" element={<ShoppingList />} />
-            <Route path="/shop" element={<Checkout />} />
-            <Route path="/settings" element={<Settings />} />
+            <Route path="/" element={<Dashboard config={config} />} />
+            <Route path="/inventory" element={<InventoryList config={config} />} />
+            <Route path="/list" element={<ShoppingList config={config} />} />
+            <Route path="/shop" element={<Checkout config={config} />} />
+            <Route path="/settings" element={<Settings config={config} onSignOut={() => {
+              localStorage.removeItem('google_access_token');
+              setIsAuthenticated(false);
+              navigate('/');
+            }} />} />
             <Route
               path="/onboarding"
               element={
                 <Onboarding
-                  invitedFamilies={config?.families || []}
-                  onCreateFamily={handleCreateFamily}
-                  onJoinFamily={handleJoinFamily}
+                  invitedHouseholds={config?.households || []}
+                  onCreateHousehold={handleCreateHousehold}
+                  onJoinHousehold={handleJoinHousehold}
                 />
               }
             />
@@ -139,7 +202,7 @@ function App() {
         <div className="max-w-md mx-auto h-20 glass rounded-[2.5rem] flex items-center justify-around pointer-events-auto border-white/10 shadow-[0_-20px_40px_-15px_rgba(0,0,0,0.5)]">
           <NavLink to="/" icon={Home} label="Home" />
           <NavLink to="/inventory" icon={Package} label="Stock" />
-          <NavLink to="/list" icon={ListIcon} label="List" />
+          <NavLink to="/list" icon={ListIcon} label="Wish List" />
           <NavLink to="/shop" icon={ShoppingCart} label="Shop" />
           <NavLink to="/settings" icon={SettingsIcon} label="More" />
         </div>

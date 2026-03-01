@@ -1,26 +1,33 @@
 import { useEffect, useState } from 'react';
 import { Calendar, Store, User, ArrowUpRight, History, Package, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { gasService } from '../services/gasService';
-import type { ShopEvent } from '../types';
+import { googleApiService } from '../services/googleApiService';
+import type { ShopEvent, UserConfig } from '../types';
 
-const Checkout = () => {
+interface CheckoutProps {
+    config: UserConfig | null;
+}
+
+const Checkout = ({ config }: CheckoutProps) => {
     const [events, setEvents] = useState<ShopEvent[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const fetchHistory = async () => {
-            setLoading(true);
-            try {
-                const history = await gasService.getShopEvents();
-                setEvents(history);
-            } catch (e) {
-                console.error(e);
-            }
-            setLoading(false);
-        };
-        fetchHistory();
-    }, []);
+        if (config?.activeHouseholdId) {
+            fetchHistory();
+        }
+    }, [config?.activeHouseholdId]);
+
+    const fetchHistory = async () => {
+        setLoading(true);
+        try {
+            const history = await googleApiService.getShopEvents();
+            setEvents(history);
+        } catch (e) {
+            console.error(e);
+        }
+        setLoading(false);
+    };
 
     return (
         <div className="space-y-6 animate-fade-in pb-10">
@@ -59,7 +66,7 @@ const Checkout = () => {
                                         </div>
                                     </div>
                                     <div className="text-right">
-                                        <div className="text-2xl font-black text-white tracking-tighter">₹{event.totalAmount}</div>
+                                        <div className="text-2xl font-black text-white tracking-tighter">{config?.currency || '₹'}{event.totalAmount}</div>
                                         <div className="flex items-center justify-end gap-1 text-[10px] text-slate-500 font-black uppercase tracking-wider mt-1">
                                             <User size={10} className="text-slate-600" />
                                             {event.buyer}
@@ -76,9 +83,10 @@ const Checkout = () => {
                                                 </div>
                                             ))}
                                         </div>
-                                        <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest">5 items</span>
+                                        {/* In a real app we'd fetch actual item counts, for now keeping placeholder logic consistent */}
+                                        <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest">Items purchased</span>
                                     </div>
-                                    <button className="text-[10px] font-black text-primary-400 uppercase tracking-[0.2em] flex items-center gap-2 group-hover:gap-3 transition-all px-4 py-2 bg-primary-500/5 rounded-xl border border-primary-500/10 group-hover:bg-primary-500/10 group-hover:border-primary-500/30">
+                                    <button className="text-[10px] font-black text-primary-400 uppercase tracking-[0.2em] flex items-center gap-2 group-hover:gap-3 transition-all px-4 py-2 bg-primary-500/5 rounded-xl border border-primary-500/10 group-hover:bg-primary-500/10 group-hover:border-primary-500/30 font-bold">
                                         View Details
                                         <ArrowUpRight size={16} />
                                     </button>

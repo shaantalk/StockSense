@@ -1,11 +1,47 @@
 import { motion } from 'framer-motion';
-import { Package, ShieldCheck, Zap, Heart } from 'lucide-react';
+import { Package, ShieldCheck, Zap, Heart, Loader2 } from 'lucide-react';
+import { useState } from 'react';
+import { googleApiService } from '../services/googleApiService';
 
 interface LoginProps {
-    onLogin: () => void;
+    onLogin: (token: string, user: { email: string; name: string }) => void;
 }
 
+// Replace with your actual Client ID from Google Cloud Console
+// Stored in .env (VITE_GOOGLE_CLIENT_ID)
+const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+
 const Login = ({ onLogin }: LoginProps) => {
+    const [loading, setLoading] = useState(false);
+
+    const handleGoogleSignIn = () => {
+        setLoading(true);
+        try {
+            const google = (window as any).google;
+            const client = google.accounts.oauth2.initTokenClient({
+                client_id: CLIENT_ID,
+                scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile',
+                callback: async (response: any) => {
+                    if (response.access_token) {
+                        localStorage.setItem('google_access_token', response.access_token);
+                        try {
+                            const userInfo = await googleApiService.getUserInfo();
+                            localStorage.setItem('userEmail', userInfo.email);
+                            onLogin(response.access_token, userInfo);
+                        } catch (error) {
+                            console.error('Failed to get user info:', error);
+                        }
+                    }
+                    setLoading(false);
+                },
+            });
+            client.requestAccessToken();
+        } catch (error) {
+            console.error('GIS Error:', error);
+            setLoading(false);
+        }
+    };
+
     return (
         <div className="min-h-screen bg-[#0f172a] flex flex-col items-center justify-center px-6 relative overflow-hidden">
             {/* Background Orbs */}
@@ -33,8 +69,8 @@ const Login = ({ onLogin }: LoginProps) => {
                     {[
                         { icon: ShieldCheck, text: 'Real-time Sync', color: 'text-emerald-400' },
                         { icon: Zap, text: 'Smart Alerts', color: 'text-orange-400' },
-                        { icon: Heart, text: 'Family Shared', color: 'text-accent-400' },
-                        { icon: Package, text: 'Multi-Family', color: 'text-primary-400' },
+                        { icon: Heart, text: 'Household Shared', color: 'text-accent-400' },
+                        { icon: Package, text: 'Multi-Household', color: 'text-primary-400' },
                     ].map((feature, i) => (
                         <div key={i} className="glass p-3 rounded-2xl flex items-center gap-3 border-slate-700/30">
                             <feature.icon size={16} className={feature.color} />
@@ -46,11 +82,16 @@ const Login = ({ onLogin }: LoginProps) => {
                 {/* Login Button */}
                 <div className="w-full space-y-4">
                     <button
-                        onClick={onLogin}
-                        className="w-full bg-white text-slate-900 h-16 rounded-2xl font-black uppercase tracking-[0.2em] shadow-xl hover:bg-slate-100 transition-all active:scale-95 flex items-center justify-center gap-4"
+                        onClick={handleGoogleSignIn}
+                        disabled={loading}
+                        className="w-full bg-white text-slate-900 h-16 rounded-2xl font-black uppercase tracking-[0.2em] shadow-xl hover:bg-slate-100 transition-all active:scale-95 flex items-center justify-center gap-4 disabled:opacity-50"
                     >
-                        <img src="https://www.google.com/favicon.ico" alt="Google" className="w-5 h-5" />
-                        Sign in with Google
+                        {loading ? (
+                            <Loader2 className="animate-spin" size={24} />
+                        ) : (
+                            <img src="https://www.google.com/favicon.ico" alt="Google" className="w-5 h-5" />
+                        )}
+                        {loading ? 'Authorizing...' : 'Sign in with Google'}
                     </button>
                     <p className="text-center text-[10px] text-slate-500 font-bold uppercase tracking-widest px-8 leading-relaxed">
                         Personal data is stored securely in your own Google Drive.

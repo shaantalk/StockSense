@@ -1,17 +1,17 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Users, ChevronRight, CheckCircle2, Loader2, Sparkles } from 'lucide-react';
-import type { Family } from '../types';
+import type { Household } from '../types';
 
 interface OnboardingProps {
-    invitedFamilies: Family[];
-    onCreateFamily: (name: string) => Promise<void>;
-    onJoinFamily: (id: string) => void;
+    invitedHouseholds: Household[];
+    onCreateHousehold: (name: string) => Promise<void>;
+    onJoinHousehold: (id: string) => void;
 }
 
-const Onboarding = ({ invitedFamilies, onCreateFamily, onJoinFamily }: OnboardingProps) => {
+const Onboarding = ({ invitedHouseholds, onCreateHousehold, onJoinHousehold }: OnboardingProps) => {
     const [step, setStep] = useState<'main' | 'create'>('main');
-    const [familyName, setFamilyName] = useState('');
+    const [householdName, setHouseholdName] = useState('');
     const [loading, setLoading] = useState(false);
 
     return (
@@ -27,18 +27,18 @@ const Onboarding = ({ invitedFamilies, onCreateFamily, onJoinFamily }: Onboardin
                     >
                         <div className="space-y-2">
                             <h1 className="text-3xl font-black text-white tracking-tight leading-tight">Welcome to the<br />Household.</h1>
-                            <p className="text-slate-400 font-medium">To get started, join an existing family or create a new one for your home.</p>
+                            <p className="text-slate-400 font-medium">To get started, join an existing household or create a new one for your home.</p>
                         </div>
 
-                        {/* Invited Families */}
-                        {invitedFamilies.length > 0 && (
+                        {/* Invited Households */}
+                        {invitedHouseholds.length > 0 && (
                             <section className="space-y-4">
                                 <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">Invitations Found</h2>
                                 <div className="grid gap-3">
-                                    {invitedFamilies.map((family) => (
+                                    {invitedHouseholds.map((household) => (
                                         <button
-                                            key={family.id}
-                                            onClick={() => onJoinFamily(family.id)}
+                                            key={household.id}
+                                            onClick={() => onJoinHousehold(household.id)}
                                             className="glass p-5 rounded-3xl flex items-center justify-between group hover:border-primary-500/50 transition-all text-left"
                                         >
                                             <div className="flex items-center gap-4">
@@ -46,7 +46,7 @@ const Onboarding = ({ invitedFamilies, onCreateFamily, onJoinFamily }: Onboardin
                                                     <Users size={24} />
                                                 </div>
                                                 <div>
-                                                    <h3 className="font-bold text-white">{family.name}</h3>
+                                                    <h3 className="font-bold text-white">{household.name}</h3>
                                                     <p className="text-[10px] text-slate-500 font-black uppercase tracking-wider mt-0.5">Invite from Member</p>
                                                 </div>
                                             </div>
@@ -68,7 +68,7 @@ const Onboarding = ({ invitedFamilies, onCreateFamily, onJoinFamily }: Onboardin
                                     <Plus size={32} />
                                 </div>
                                 <div className="text-center">
-                                    <h3 className="font-black text-white uppercase tracking-widest text-xs">Create New Family</h3>
+                                    <h3 className="font-black text-white uppercase tracking-widest text-xs">Create New Household</h3>
                                     <p className="text-[10px] text-slate-500 font-medium mt-1 italic">Start a fresh sheet for your home</p>
                                 </div>
                             </button>
@@ -89,7 +89,7 @@ const Onboarding = ({ invitedFamilies, onCreateFamily, onJoinFamily }: Onboardin
                             >
                                 ← Back to selection
                             </button>
-                            <h1 className="text-3xl font-black text-white tracking-tight">Name your Family</h1>
+                            <h1 className="text-3xl font-black text-white tracking-tight">Name your Household</h1>
                             <p className="text-slate-400 font-medium text-sm">This will be the name of your private Google Sheet.</p>
                         </div>
 
@@ -98,12 +98,12 @@ const Onboarding = ({ invitedFamilies, onCreateFamily, onJoinFamily }: Onboardin
                                 <input
                                     type="text"
                                     placeholder="e.g. Panda Household"
-                                    value={familyName}
-                                    onChange={(e) => setFamilyName(e.target.value)}
+                                    value={householdName}
+                                    onChange={(e) => setHouseholdName(e.target.value)}
                                     className="w-full bg-slate-900 border-2 border-slate-800 rounded-3xl h-20 px-8 text-xl font-bold text-white focus:outline-none focus:border-primary-500 transition-all placeholder:text-slate-700 shadow-inner"
                                     autoFocus
                                 />
-                                {familyName.length >= 3 && (
+                                {householdName.length >= 3 && (
                                     <div className="absolute right-6 top-1/2 -translate-y-1/2 text-primary-500">
                                         <CheckCircle2 size={24} />
                                     </div>
@@ -115,15 +115,15 @@ const Onboarding = ({ invitedFamilies, onCreateFamily, onJoinFamily }: Onboardin
                                     <Sparkles size={20} />
                                 </div>
                                 <p className="text-xs text-slate-400 leading-relaxed font-medium">
-                                    This will automatically setup all required sheets (Inventory, Shopping List, Config) in your Google Drive.
+                                    This will automatically setup all required sheets (Stock, Wish List, Config) in your Google Drive.
                                 </p>
                             </div>
 
                             <button
-                                disabled={familyName.length < 3 || loading}
+                                disabled={householdName.length < 3 || loading}
                                 onClick={async () => {
                                     setLoading(true);
-                                    await onCreateFamily(familyName);
+                                    await onCreateHousehold(householdName);
                                     setLoading(false);
                                 }}
                                 className="w-full h-20 bg-primary-600 rounded-3xl font-black uppercase tracking-[0.3em] text-white shadow-2xl shadow-primary-500/20 hover:bg-primary-500 transition-all active:scale-95 disabled:opacity-30 disabled:grayscale flex items-center justify-center gap-3"

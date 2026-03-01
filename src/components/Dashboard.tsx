@@ -1,31 +1,44 @@
 import { useEffect, useState } from 'react';
 import { TrendingDown, ShoppingBag, ChevronRight, ArrowUpRight, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { gasService } from '../services/gasService';
+import { googleApiService } from '../services/googleApiService';
 import type { InventoryItem, ShoppingListItem, UserConfig } from '../types';
 import { Link } from 'react-router-dom';
 
-const Dashboard = () => {
+interface DashboardProps {
+    config: UserConfig | null;
+}
+
+const Dashboard = ({ config }: DashboardProps) => {
     const [inventory, setInventory] = useState<InventoryItem[]>([]);
     const [shoppingList, setShoppingList] = useState<ShoppingListItem[]>([]);
-    const [config, setConfig] = useState<UserConfig | null>(null);
-    const [stats, setStats] = useState({ weeklySpend: 0 });
+    const [weeklySpend, setWeeklySpend] = useState(0);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const fetchData = async () => {
+            if (!config?.activeHouseholdId) {
+                setLoading(false);
+                return;
+            }
             setLoading(true);
             try {
-                const [inv, shop, cfg, dashboardStats] = await Promise.all([
-                    gasService.getInventory(),
-                    gasService.getShoppingList(),
-                    gasService.getConfig(),
-                    gasService.getDashboardStats()
+                const [inv, shop, events] = await Promise.all([
+                    googleApiService.getInventory(),
+                    googleApiService.getShoppingList(),
+                    googleApiService.getShopEvents()
                 ]);
                 setInventory(inv);
                 setShoppingList(shop);
-                setConfig(cfg);
-                setStats(dashboardStats);
+
+                // Calculate weekly spend (Sunday to Saturday or last 7 days)
+                const now = new Date();
+                const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                const spend = events
+                    .filter(e => new Date(e.date) >= oneWeekAgo)
+                    .reduce((acc, curr) => acc + curr.totalAmount, 0);
+                setWeeklySpend(spend);
+
             } catch (e) {
                 console.error("Dashboard fetch error:", e);
             } finally {
@@ -33,7 +46,7 @@ const Dashboard = () => {
             }
         };
         fetchData();
-    }, []);
+    }, [config?.activeHouseholdId]);
 
     const nearFinishCount = inventory.filter(i => i.status === 'Near Finish').length;
 
@@ -123,21 +136,21 @@ const Dashboard = () => {
             <section className="glass p-6 rounded-3xl bg-slate-900 border-slate-700 shadow-2xl relative overflow-hidden group">
                 <div className="relative z-10 flex flex-col gap-4">
                     <div className="flex items-center justify-between">
-                        <h2 className="text-white font-bold text-lg">Family Expenses</h2>
+                        <h2 className="text-white font-bold text-lg">Household Expenses</h2>
                         <ArrowUpRight className="text-slate-500 group-hover:text-white group-hover:translate-x-1 group-hover:-translate-y-1 transition-all" size={20} />
                     </div>
                     <div className="flex items-end justify-between">
                         <div className="flex flex-col">
-                            <span className="text-3xl font-black text-white tracking-tighter">₹{stats.weeklySpend.toLocaleString()}</span>
+                            <span className="text-3xl font-black text-white tracking-tighter">{config?.currency || '₹'}{weeklySpend.toLocaleString()}</span>
                             <span className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em]">Spent this week</span>
                         </div>
                         <div className="flex -space-x-3">
                             {config?.members.map(member => (
                                 <img
-                                    key={member}
+                                    key={member.email}
                                     className="w-10 h-10 rounded-full border-2 border-slate-900 shadow-xl"
-                                    src={`https://ui-avatars.com/api/?name=${encodeURIComponent(member)}&background=random&color=fff`}
-                                    alt={member}
+                                    src={`https://ui-avatars.com/api/?name=${encodeURIComponent(member.email)}&background=${member.color.substring(1)}&color=fff`}
+                                    alt={member.email}
                                 />
                             ))}
                         </div>

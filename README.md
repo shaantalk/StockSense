@@ -50,24 +50,54 @@
 
 ---
 
-## 4. Data Schema (Google Sheets)
-StockSense automatically generates and manages these sheets upon initialization:
+## 4. Architecture
 
-- **`Inventory`**: `ItemName`, `Category`, `CurrentQty`, `Unit`, `Threshold`, `Status`, `ExpiryDate`, `AddedDate`, `RestockedDate`, `UseNowDaysPrior`, `StepQty`, `Notes`
-- **`ShoppingList`**: `ItemName`, `QtyNeeded`, `Priority`
-- **`ShopEvents`**: `EventID`, `Date`, `ShopSource`, `TotalAmount`, `Buyer`, `EntryType`
-- **`PurchasedItems`**: `EventID`, `ItemName`, `QtyBought`, `PricePerUnit`
-- **`WastageEvents`**: `EventID`, `Date`, `ItemName`, `QtyWasted`, `Reason`
-- **`Categories`**: Dynamic list of categories with associated hex colors.
-- **`Shops`**: Dynamic list of shops with associated hex colors.
-- **`Members`**: Dynamic list of household members, their preferred currency, and permissions.
-- **`Units`**: Dynamic list of available size descriptions.
-- **`Statuses`**: Dynamic list of item statuses and colors.
-- **`Settings`**: Key/Value pairs for household configuration (e.g. default currency).
+```mermaid
+graph TD
+    A[React Client / Vite] -->|Google Identity Services| B(OAuth 2.0 Auth)
+    A -->|Google Drive V3 API| C{Discover Household Sheets}
+    A -->|Google Sheets V4 API| D[(Google Sheets)]
+    
+    D -->|Inventory| E[Stock Levels]
+    D -->|ShoppingList| F[Wish List]
+    D -->|ShopEvents, PurchasedItems| G[Expense Tracking]
+    D -->|WastageEvents| H[Wastage Tracking]
+    D -->|Settings, Categories, etc.| I[Dynamic Configurations]
+    
+    B -->|Returns Token| A
+```
 
 ---
 
-## 5. Security & Privacy Statement
+## 5. Data Schema (Google Sheets)
+StockSense automatically generates and manages these sheets upon initialization:
+
+### Primary Data Sheets
+
+| Sheet Name           | Columns                                                                                                                                                |
+| :------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`Inventory`**      | `ItemName`, `Category`, `CurrentQty`, `Unit`, `Threshold`, `Status`, `ExpiryDate`, `AddedDate`, `RestockedDate`, `UseNowDaysPrior`, `StepQty`, `Notes` |
+| **`ShoppingList`**   | `ItemName`, `QtyNeeded`, `Priority`                                                                                                                    |
+| **`ShopEvents`**     | `EventID`, `Date`, `ShopSource`, `TotalAmount`, `Buyer`, `EntryType`                                                                                   |
+| **`PurchasedItems`** | `EventID`, `ItemName`, `QtyBought`, `PricePerUnit`                                                                                                     |
+| **`WastageEvents`**  | `EventID`, `Date`, `ItemName`, `QtyWasted`, `Reason`                                                                                                   |
+
+### Configuration Sheets (Dynamic Dropdowns)
+
+| Sheet Name       | Description                                                                    |
+| :--------------- | :----------------------------------------------------------------------------- |
+| **`Categories`** | Dynamic list of categories with associated hex colors (e.g. Grocery, Medical). |
+| **`Shops`**      | Dynamic list of shops with associated hex colors (e.g. Amazon, Blinkit).       |
+| **`Members`**    | Dynamic list of household members, their preferred currency, and permissions.  |
+| **`Units`**      | Dynamic list of available size descriptions (e.g. Kilos, Liters, ML).          |
+| **`Statuses`**   | Dynamic list of item statuses and colors (e.g. Stocked, Expired, Use now).     |
+| **`Settings`**   | Key/Value pairs for household configuration (e.g. Currency).                   |
+
+---
+
+---
+
+## 6. Security & Privacy Statement
 **Privacy Statement:** StockSense is committed to your privacy. As a completely serverless application, **we do not collect, store, or share any of your personal data.** 
 - All inventory, shopping, and expense data is routed directly from your browser to your personal Google Drive. 
 - You retain completely exclusive ownership and control over your data.
@@ -76,14 +106,18 @@ StockSense automatically generates and manages these sheets upon initialization:
 
 ---
 
-## 6. UI/UX Goals
+---
+
+## 7. UI/UX Goals
 - **Mobile First:** Designed with a sleek, intuitive interface for quick, frictionless use while in the kitchen or at the store.
 - **Configurable Dynamics:** All specific dropdowns (Shops, Members, Categories, Units, Statuses) fetch their data dynamically from your household's `Settings` and corresponding data sheets so you can customize the experience without any code changes.
 - **Animated & Responsive:** Built with Framer Motion and Tailwind to ensure smooth transitions, optimistic UI updates, and an app-like feel.
 
 ---
 
-## 7. How to Host Your Own StockSense
+---
+
+## 8. How to Host Your Own StockSense
 Since StockSense is a completely static frontend that directly connects to Google APIs from the client side, you can host your own instance entirely for free using GitHub Pages.
 
 ### Step 1: Fork and Clone

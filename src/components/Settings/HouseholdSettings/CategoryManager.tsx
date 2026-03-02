@@ -36,13 +36,13 @@ export const CategoryManager = ({ config, setDeleteConfig }: Pick<SharedSettings
 
             <div className="flex flex-wrap gap-2">
                 {config?.categories.map(cat => (
-                    <div key={cat.name} className="flex items-center gap-2 bg-slate-800/50 border border-slate-700 pl-3 pr-1 py-1.5 rounded-xl group/cat w-fit">
+                    <div key={cat.categoryId} className="flex items-center gap-2 bg-slate-800/50 border border-slate-700 pl-3 pr-1 py-1.5 rounded-xl group/cat w-fit">
                         <div className="flex items-center gap-2">
                             <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: cat.color }} />
                             <span className="text-xs font-bold text-slate-300 tracking-wider">{cat.name}</span>
                         </div>
                         <button
-                            onClick={() => setDeleteConfig({ type: 'Category', id: cat.name, name: cat.name })}
+                            onClick={() => setDeleteConfig({ type: 'Category', id: cat.categoryId, name: cat.name })}
                             className="p-1 hover:bg-red-500/20 rounded-lg text-slate-500 hover:text-red-400 transition-colors"
                         >
                             <X size={12} />

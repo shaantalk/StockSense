@@ -36,13 +36,13 @@ export const ShopManager = ({ config, setDeleteConfig }: Pick<SharedSettingsProp
 
             <div className="flex flex-wrap gap-2">
                 {config?.shops.map(shop => (
-                    <div key={shop.name} className="flex items-center gap-2 bg-slate-800/50 border border-slate-700 pl-3 pr-1 py-1.5 rounded-xl group/shop w-fit">
+                    <div key={shop.shopId} className="flex items-center gap-2 bg-slate-800/50 border border-slate-700 pl-3 pr-1 py-1.5 rounded-xl group/shop w-fit">
                         <div className="flex items-center gap-2">
                             <div className="w-2.5 h-2.5 rounded-full border border-slate-700" style={{ backgroundColor: shop.color }} />
                             <span className="text-xs font-bold text-slate-300 tracking-wider">{shop.name}</span>
                         </div>
                         <button
-                            onClick={() => setDeleteConfig({ type: 'Shop', id: shop.name, name: shop.name })}
+                            onClick={() => setDeleteConfig({ type: 'Shop', id: shop.shopId, name: shop.name })}
                             className="p-1 hover:bg-red-500/20 rounded-lg text-slate-500 hover:text-red-400 transition-colors"
                         >
                             <X size={12} />

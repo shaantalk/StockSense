@@ -1,113 +1,73 @@
-import { useEffect, useState } from 'react';
-import { Search, Filter, Package, Loader2, Plus, ShoppingCart } from 'lucide-react';
-import { googleApiService } from '../services/googleApiService';
+import { useState } from 'react';
+import { Search, Filter, Package, Loader2, Plus, Minus, ShoppingCart } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSearchParams } from 'react-router-dom';
-import type { InventoryItem, UserConfig } from '../types';
+import type { UserConfig } from '../types';
 import { AddItemModal } from './Inventory/AddItemModal';
 import { StatusChangeModal } from './Inventory/StatusChangeModal';
+import { useInventory, useUpdateInventoryBatch, useAddShoppingItem, useLogWastageEvent, useLogConsumeEvent, useUpdateItem, type CombinedInventoryItem } from '../hooks/useInventory';
 
 interface InventoryListProps {
     config: UserConfig | null;
 }
 
 const InventoryList = ({ config }: InventoryListProps) => {
-    const [items, setItems] = useState<InventoryItem[]>([]);
-    const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [searchParams] = useSearchParams();
-    const [filter, setFilter] = useState<'All' | 'Low' | 'Use now' | 'Expired' | 'Out of stock'>(searchParams.get('filter') as any || 'All');
+    const [filter, setFilter] = useState<'All' | 'Low' | 'USE_NOW' | 'EXPIRED' | 'Out of stock'>(searchParams.get('filter') as any || 'All');
 
     const [showAddModal, setShowAddModal] = useState(false);
-    const [newItem, setNewItem] = useState<Partial<InventoryItem>>({
+    const [newItem, setNewItem] = useState<Partial<CombinedInventoryItem>>({
         itemName: '',
         category: 'Grocery',
         currentQty: 1,
         unit: 'Numbers',
         threshold: 1,
-        status: 'Stocked',
+        status: 'STOCKED',
         expiryDate: '',
         useNowDaysPrior: 1,
         stepQty: 1,
         notes: ''
     });
     const [adding, setAdding] = useState(false);
-    const [statusActionItem, setStatusActionItem] = useState<InventoryItem | null>(null);
+    const [statusActionItem, setStatusActionItem] = useState<CombinedInventoryItem | null>(null);
 
-    useEffect(() => {
-        if (config?.activeHouseholdId) {
-            fetchInventory();
-        }
-    }, [config?.activeHouseholdId]);
+    const { data: items = [], isLoading: loading } = useInventory(config?.activeHouseholdId);
+    const updateInventoryBatch = useUpdateInventoryBatch();
+    const updateItem = useUpdateItem();
+    const addShoppingItem = useAddShoppingItem();
+    const logWastage = useLogWastageEvent();
+    const logConsume = useLogConsumeEvent();
 
-    const fetchInventory = async () => {
-        setLoading(true);
-        try {
-            const data = await googleApiService.getInventory();
-
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-
-            const processedData = await Promise.all(data.map(async (item) => {
-                if (item.expiryDate && item.status !== 'Use now' && item.status !== 'Expired' && item.status !== 'Out of stock') {
-                    const expDate = new Date(item.expiryDate);
-                    expDate.setHours(0, 0, 0, 0);
-                    const diffTime = expDate.getTime() - today.getTime();
-                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                    const thresholdDays = item.useNowDaysPrior ?? 1;
-
-                    if (diffDays <= thresholdDays && diffDays >= 0) {
-                        const updatedItem = { ...item, status: 'Use now' };
-                        // Update in background silently
-                        await googleApiService.updateInventoryItem(updatedItem).catch(console.error);
-                        return updatedItem;
-                    }
-                }
-                return item;
-            }));
-
-            setItems(processedData);
-        } catch (e) {
-            console.error("Failed to fetch stock:", e);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleAddToWishlist = async (item: InventoryItem) => {
+    const handleAddToWishlist = async (item: CombinedInventoryItem) => {
         try {
             // First log wastage if item is Expired
-            if (item.status === 'Expired' && item.currentQty > 0) {
-                await googleApiService.logWastageEvent({
+            if (item.status === 'EXPIRED' && item.currentQty > 0) {
+                logWastage.mutate({
                     eventId: `WST-${Date.now()}`,
                     date: new Date().toISOString(),
-                    itemName: item.itemName,
+                    itemId: item.itemId,
+                    batchId: item.batchId,
                     qtyWasted: item.currentQty,
+                    valueLost: 0,
                     reason: "Expired"
                 });
             }
 
             // Add to Shopping List
-            await googleApiService.addShoppingItem({
-                itemName: item.itemName,
+            addShoppingItem.mutate({
+                itemId: item.itemId,
                 qtyNeeded: item.stepQty || 1, // Add minimum step qty instead of 1
-                priority: 'Medium'
+                priority: 'MEDIUM'
             });
 
-            // Update item: set currentQty to 0 and status to "Out of stock"
-            const updatedItem = {
-                ...item,
-                currentQty: 0,
-                status: 'Out of stock' as const
-            };
-
-            // Optimistic update
-            setItems(prev => prev.map(i =>
-                i.itemName === item.itemName ? updatedItem : i
-            ));
-
-            await googleApiService.updateInventoryItem(updatedItem);
-            fetchInventory();
+            // Update item: set currentQty to 0 and status to "CONSUMED"
+            updateInventoryBatch.mutate({
+                batchId: item.batchId,
+                itemId: item.itemId,
+                qtyRemaining: 0,
+                status: 'CONSUMED'
+            });
         } catch (e) {
             console.error("Failed to add to wish list:", e);
         }
@@ -116,22 +76,24 @@ const InventoryList = ({ config }: InventoryListProps) => {
     const handleStatusChange = async (newStatus: string) => {
         if (!statusActionItem) return;
 
-        const updatedItem = { ...statusActionItem, status: newStatus };
-        if (newStatus === 'Stocked' && statusActionItem.status !== 'Stocked') {
-            const todayStr = new Date().toISOString().split('T')[0];
-            updatedItem.restockedDate = todayStr;
+        if (newStatus === 'EXPIRED' && statusActionItem.status !== 'EXPIRED' && statusActionItem.currentQty > 0) {
+            logWastage.mutate({
+                eventId: `WST-${Date.now()}`,
+                date: new Date().toISOString(),
+                itemId: statusActionItem.itemId,
+                batchId: statusActionItem.batchId,
+                qtyWasted: statusActionItem.currentQty,
+                valueLost: statusActionItem.currentQty * (statusActionItem.pricePerUnit || 0),
+                reason: "Marked as Expired"
+            });
         }
 
-        setItems(prev => prev.map(i => i.itemName === statusActionItem.itemName ? updatedItem : i));
+        updateInventoryBatch.mutate({
+            batchId: statusActionItem.batchId,
+            itemId: statusActionItem.itemId,
+            status: newStatus as any
+        });
         setStatusActionItem(null);
-
-        try {
-            await googleApiService.updateInventoryItem(updatedItem);
-        } catch (e) {
-            console.error("Failed to update status:", e);
-            alert("Failed to update status");
-            fetchInventory(); // Revert
-        }
     };
 
     const handleAddItem = async () => {
@@ -139,30 +101,82 @@ const InventoryList = ({ config }: InventoryListProps) => {
         setAdding(true);
         try {
             const todayStr = new Date().toISOString().split('T')[0];
-            const itemToSave = {
-                ...newItem,
-                addedDate: newItem.addedDate || todayStr
-            };
-            await googleApiService.updateInventoryItem(itemToSave as InventoryItem);
+
+            // 1. Create/Update Item
+            const itemId = await updateItem.mutateAsync({
+                itemName: newItem.itemName,
+                category: newItem.category || 'Grocery',
+                stockType: newItem.stockType || 'MIXED',
+                unit: newItem.unit || 'Numbers',
+                threshold: newItem.threshold || 1,
+                useNowDaysPrior: newItem.useNowDaysPrior || 1,
+                stepQty: newItem.stepQty || 1,
+                notes: newItem.notes || ''
+            });
+
+            // 2. Create Batch
+            updateInventoryBatch.mutate({
+                batchId: '', // Will be generated in service
+                itemId,
+                qtyAdded: newItem.currentQty || 1,
+                qtyRemaining: newItem.currentQty || 1,
+                pricePerUnit: newItem.pricePerUnit || 0,
+                expiryDate: newItem.expiryDate || '',
+                addedDate: newItem.addedDate || todayStr,
+                status: newItem.status as any || 'STOCKED'
+            });
+
             setShowAddModal(false);
             setNewItem({
                 itemName: '',
                 category: config?.categories?.[0]?.name || 'Grocery',
                 currentQty: 1,
-                unit: config?.units?.[0] || 'Numbers',
+                unit: config?.units?.[0]?.name || 'Numbers',
                 threshold: 1,
-                status: 'Stocked',
+                status: 'STOCKED',
                 expiryDate: '',
                 useNowDaysPrior: 1,
                 stepQty: 1,
                 notes: ''
             });
-            fetchInventory();
         } catch (e: any) {
             alert(e.message || "Failed to add item");
         } finally {
             setAdding(false);
         }
+    };
+
+    const handleQtyChange = (item: CombinedInventoryItem, delta: number) => {
+        const step = item.stepQty || 1;
+        const newQty = Math.max(0, item.currentQty + (delta * step));
+
+        if (delta < 0 && item.currentQty > newQty) {
+            logConsume.mutate({
+                eventId: `CNS-${Date.now()}`,
+                date: new Date().toISOString(),
+                itemId: item.itemId,
+                batchId: item.batchId,
+                qtyConsumed: item.currentQty - newQty,
+                consumer: "Household Member"
+            });
+
+            if (newQty <= item.threshold && item.currentQty > item.threshold) {
+                addShoppingItem.mutate({
+                    itemId: item.itemId,
+                    qtyNeeded: item.stepQty || 1,
+                    priority: 'MEDIUM'
+                });
+            }
+        }
+
+        const newStatus = newQty === 0 ? 'CONSUMED' : (newQty <= item.threshold ? 'STOCKED' : item.status === 'CONSUMED' ? 'STOCKED' : item.status);
+
+        updateInventoryBatch.mutate({
+            batchId: item.batchId,
+            itemId: item.itemId,
+            qtyRemaining: newQty,
+            status: newStatus as any
+        });
     };
 
     const filteredItems = items.filter(item => {
@@ -180,9 +194,9 @@ const InventoryList = ({ config }: InventoryListProps) => {
         const todayStr = formatYMD(today);
 
         if (filter === 'All') return true;
-        if (filter === 'Low') return item.status === 'Low' || (item.currentQty <= item.threshold && item.currentQty > 0);
-        if (filter === 'Expired') return item.status === 'Expired' || (!!item.expiryDate && item.expiryDate < todayStr);
-        return item.status === filter;
+        if (filter === 'Low') return item.currentQty <= item.threshold && item.currentQty > 0;
+        if (filter === 'EXPIRED') return item.status === 'EXPIRED' || (!!item.expiryDate && item.expiryDate < todayStr);
+        return item.status === filter || (item.status === 'CONSUMED' && filter === 'Out of stock');
     });
 
     return (
@@ -215,7 +229,7 @@ const InventoryList = ({ config }: InventoryListProps) => {
                 </div>
 
                 <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
-                    {['All', 'Low', 'Use now', 'Expired', 'Out of stock'].map((f) => (
+                    {['All', 'Low', 'USE_NOW', 'EXPIRED', 'Out of stock'].map((f) => (
                         <button
                             key={f}
                             onClick={() => setFilter(f as any)}
@@ -224,7 +238,7 @@ const InventoryList = ({ config }: InventoryListProps) => {
                                 : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-700'
                                 }`}
                         >
-                            {f}
+                            {f === 'USE_NOW' ? 'Use now' : f === 'EXPIRED' ? 'Expired' : f}
                         </button>
                     ))}
                 </div>
@@ -240,7 +254,7 @@ const InventoryList = ({ config }: InventoryListProps) => {
                     <AnimatePresence>
                         {filteredItems.map((item, idx) => (
                             <motion.div
-                                key={item.itemName}
+                                key={item.batchId}
                                 layout
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
@@ -270,11 +284,10 @@ const InventoryList = ({ config }: InventoryListProps) => {
                                                 </>
                                             )}
                                         </p>
-                                        {(item.addedDate || item.restockedDate || item.stepQty || item.notes) && (
+                                        {(item.addedDate || item.stepQty || item.notes) && (
                                             <div className="text-[10px] text-slate-500 font-medium mt-1">
                                                 <div className="flex items-center gap-2">
                                                     {item.addedDate && <span>Added: {item.addedDate}</span>}
-                                                    {item.restockedDate && <span>Restocked: {item.restockedDate}</span>}
                                                 </div>
                                                 {(item.stepQty !== undefined && item.stepQty > 1) && (
                                                     <div className="mt-0.5"><span className="text-slate-400">Step Qty:</span> {item.stepQty}</div>
@@ -288,6 +301,24 @@ const InventoryList = ({ config }: InventoryListProps) => {
                                 </div>
 
                                 <div className="flex items-center gap-2">
+                                    <div className="flex items-center bg-slate-800 rounded-xl border border-slate-700 p-0.5">
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); handleQtyChange(item, -1); }}
+                                            className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
+                                            title="Reduce quantity (Consume)"
+                                        >
+                                            <Minus size={16} />
+                                        </button>
+                                        <span className="text-white font-bold text-sm min-w-[1.5rem] text-center">{item.currentQty}</span>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); handleQtyChange(item, 1); }}
+                                            className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
+                                            title="Increase quantity"
+                                        >
+                                            <Plus size={16} />
+                                        </button>
+                                    </div>
+
                                     <button
                                         onClick={() => handleAddToWishlist(item)}
                                         className="p-2 bg-slate-800 text-slate-400 rounded-xl hover:bg-blue-500/20 hover:text-blue-400 transition-all border border-slate-700"

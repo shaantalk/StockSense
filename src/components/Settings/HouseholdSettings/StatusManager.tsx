@@ -5,7 +5,7 @@ import { googleApiService } from '../../../services/googleApiService';
 import type { SharedSettingsProps } from '../types';
 
 export const StatusManager = ({ config, setDeleteConfig }: Pick<SharedSettingsProps, 'config' | 'setDeleteConfig'>) => {
-    const DEFAULT_STATUSES = ['Stocked', 'Expired', 'Low', 'Out of stock', 'Use now'];
+    const DEFAULT_STATUSES = ['STOCKED', 'EXPIRED', 'CONSUMED', 'USE_NOW'];
     const [showModal, setShowModal] = useState(false);
     const [newName, setNewName] = useState('');
     const [newColor, setNewColor] = useState('#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0'));
@@ -37,14 +37,14 @@ export const StatusManager = ({ config, setDeleteConfig }: Pick<SharedSettingsPr
 
             <div className="flex flex-wrap gap-2">
                 {config?.statuses.map(status => (
-                    <div key={status.name} className="flex items-center gap-2 bg-slate-800/50 border border-slate-700 pl-3 pr-1 py-1.5 rounded-xl group/status w-fit">
+                    <div key={status.statusId} className="flex items-center gap-2 bg-slate-800/50 border border-slate-700 pl-3 pr-1 py-1.5 rounded-xl group/status w-fit">
                         <div className="flex items-center gap-2">
                             <div className="w-2.5 h-2.5 rounded-full border border-slate-700" style={{ backgroundColor: status.color }} />
                             <span className="text-xs font-bold text-slate-300 tracking-wider">{status.name}</span>
                         </div>
                         {!DEFAULT_STATUSES.includes(status.name) && (
                             <button
-                                onClick={() => setDeleteConfig({ type: 'Status', id: status.name, name: status.name })}
+                                onClick={() => setDeleteConfig({ type: 'Status', id: status.statusId, name: status.name })}
                                 className="p-1 hover:bg-red-500/20 rounded-lg text-slate-500 hover:text-red-400 transition-colors"
                             >
                                 <X size={12} />

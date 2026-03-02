@@ -1,9 +1,10 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, CheckCircle2 } from 'lucide-react';
-import type { InventoryItem, UserConfig } from '../../types';
+import type { UserConfig } from '../../types';
+import type { CombinedInventoryItem } from '../../hooks/useInventory';
 
 interface StatusChangeModalProps {
-    item: InventoryItem | null;
+    item: CombinedInventoryItem | null;
     onClose: () => void;
     onChangeStatus: (newStatus: string) => void;
     config: UserConfig | null;

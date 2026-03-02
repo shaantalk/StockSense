@@ -34,10 +34,10 @@ export const UnitManager = ({ config, setDeleteConfig }: Pick<SharedSettingsProp
 
             <div className="flex flex-wrap gap-2">
                 {config?.units.map(unit => (
-                    <div key={unit} className="flex items-center gap-2 bg-slate-800/50 border border-slate-700 pl-3 pr-1 py-1.5 rounded-xl group/unit w-fit">
-                        <span className="text-xs font-bold text-slate-300 tracking-wider">{unit}</span>
+                    <div key={unit.unitId} className="flex items-center gap-2 bg-slate-800/50 border border-slate-700 pl-3 pr-1 py-1.5 rounded-xl group/unit w-fit">
+                        <span className="text-xs font-bold text-slate-300 tracking-wider">{unit.name}</span>
                         <button
-                            onClick={() => setDeleteConfig({ type: 'Unit', id: unit, name: unit })}
+                            onClick={() => setDeleteConfig({ type: 'Unit', id: unit.unitId, name: unit.name })}
                             className="p-1 hover:bg-red-500/20 rounded-lg text-slate-500 hover:text-red-400 transition-colors"
                         >
                             <X size={12} />

@@ -9,9 +9,10 @@ import Settings from './components/Settings';
 import Checkout from './components/Checkout';
 import Login from './components/Login';
 import Onboarding from './components/Onboarding';
+import Financials from './components/Financials';
 import { googleApiService } from './services/googleApiService';
 import { runInitJobs } from './services/initService';
-import type { UserConfig, Shop, Member, Status } from './types';
+import type { UserConfig, Shop, Member, Status, Category, UnitObj } from './types';
 
 function App() {
   const [config, setConfig] = useState<UserConfig | null>(null);
@@ -71,9 +72,9 @@ function App() {
       }
 
       let shops: Shop[] = [];
-      let categories: { name: string; color: string }[] = [];
+      let categories: Category[] = [];
       let members: Member[] = [];
-      let units: string[] = [];
+      let units: UnitObj[] = [];
       let statuses: Status[] = [];
       let currency = 'INR_India'; // Default
 
@@ -90,33 +91,39 @@ function App() {
         const unitsData = await fetchSafe('Units');
         const statusesData = await fetchSafe('Statuses');
 
-        shops = shopsData.map((s: any) => ({ name: s.name, color: s.color || '#94a3b8' })).filter((s: any) => s.name);
-        categories = categoriesData.map((c: any) => ({ name: c.name, color: c.color })).filter((c: any) => c.name);
+        const mkId = (p: string) => `${p}-${Math.random().toString(36).substring(2, 8)}`;
+
+        shops = shopsData.map((s: any) => ({ shopId: s.shopid || s.shopId || mkId('SHOP'), name: s.name, color: s.color || '#94a3b8' })).filter((s: any) => s.name);
+        categories = categoriesData.map((c: any) => ({ categoryId: c.categoryid || c.categoryId || mkId('CAT'), name: c.name, color: c.color, type: c.type || 'INVENTORY' })).filter((c: any) => c.name);
         members = membersData.map((m: any) => ({
+          memberId: m.memberid || m.memberId || mkId('MEM'),
           email: m.email,
           name: m.name || m.email?.split('@')[0] || 'User',
           color: m.color || '#94a3b8',
           picture: m.picture || '',
           preferredCurrency: m.preferredcurrency || m.preferredCurrency || '', // handle case-insensitivity of sheet headers
-          isOwner: m.isowner === 'TRUE' || m.isOwner === 'TRUE' || m.isowner === 'true' || m.isOwner === 'true'
+          isOwner: m.isowner === 'TRUE' || m.isOwner === 'TRUE' || m.isowner === 'true' || m.isOwner === 'true',
+          defaultSpendRatio: m.defaultspendratio ? Number(m.defaultspendratio) : 1
         })).filter((m: any) => m.email);
-        units = unitsData.map((u: any) => u.name).filter(Boolean);
-        statuses = statusesData.map((s: any) => ({ name: s.name, color: s.color || '#94a3b8' })).filter((s: any) => s.name);
+        units = unitsData.map((u: any) => ({ unitId: u.unitid || u.unitId || mkId('UNIT'), name: u.name })).filter((u: any) => u.name);
+        statuses = statusesData.map((s: any) => ({ statusId: s.statusid || s.statusId || mkId('STAT'), name: s.name, color: s.color || '#94a3b8' })).filter((s: any) => s.name);
 
         // Fallbacks
-        const legacyShops = configData.filter((c: any) => c.type === 'Shop').map((c: any) => ({ name: c.value, color: '#94a3b8' }));
+        const legacyShops = configData.filter((c: any) => c.type === 'Shop').map((c: any) => ({ shopId: mkId('SHOP'), name: c.value, color: '#94a3b8' }));
         if (legacyShops.length > 0 && shops.length === 0) shops = legacyShops;
 
-        const legacyMembers = configData.filter((c: any) => c.type === 'Member').map((c: any) => ({ email: c.value, name: c.value?.split('@')[0] || 'User', color: '#94a3b8', picture: '', preferredCurrency: '', isOwner: false }));
+        const legacyMembers = configData.filter((c: any) => c.type === 'Member').map((c: any) => ({ memberId: mkId('MEM'), email: c.value, name: c.value?.split('@')[0] || 'User', color: '#94a3b8', picture: '', preferredCurrency: '', isOwner: false, defaultSpendRatio: 1 }));
         if (legacyMembers.length > 0 && members.length === 0) members = legacyMembers;
 
-        if (units.length === 0) units = ['Kilos', 'Liters', 'Grams', 'Numbers', 'Packets'];
+        if (units.length === 0) units = [
+          { unitId: mkId('UNIT'), name: 'Kilos' }, { unitId: mkId('UNIT'), name: 'Liters' }, { unitId: mkId('UNIT'), name: 'Grams' }, { unitId: mkId('UNIT'), name: 'Numbers' }, { unitId: mkId('UNIT'), name: 'Packets' }
+        ];
+
         if (statuses.length === 0) statuses = [
-          { name: 'Stocked', color: '#10b981' },
-          { name: 'Expired', color: '#a855f7' },
-          { name: 'Low', color: '#ef4444' },
-          { name: 'Out of stock', color: '#6b7280' },
-          { name: 'Use now', color: '#f59e0b' }
+          { statusId: mkId('STAT'), name: 'STOCKED', color: '#10b981' },
+          { statusId: mkId('STAT'), name: 'EXPIRED', color: '#a855f7' },
+          { statusId: mkId('STAT'), name: 'USE_NOW', color: '#f59e0b' },
+          { statusId: mkId('STAT'), name: 'CONSUMED', color: '#6b7280' }
         ];
 
         const currencyEntry = settingsData.find((c: any) => c.key === 'Currency') || configData.find((c: any) => c.type === 'Currency');
@@ -251,6 +258,7 @@ function App() {
             <Route path="/inventory" element={<InventoryList config={config} />} />
             <Route path="/list" element={<ShoppingList config={config} />} />
             <Route path="/shop" element={<Checkout config={config} />} />
+            <Route path="/financials" element={<Financials config={config} />} />
             <Route path="/settings" element={<Settings config={config} onSignOut={() => {
               localStorage.removeItem('google_access_token');
               setIsAuthenticated(false);

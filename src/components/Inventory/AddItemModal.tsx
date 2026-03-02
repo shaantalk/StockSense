@@ -1,17 +1,18 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
-import type { InventoryItem, UserConfig } from '../../types';
+import type { UserConfig } from '../../types';
+import type { CombinedInventoryItem } from '../../hooks/useInventory';
 
 interface AddItemModalProps {
     show: boolean;
     onClose: () => void;
-    newItem: Partial<InventoryItem>;
-    setNewItem: (item: Partial<InventoryItem>) => void;
+    newItem: Partial<CombinedInventoryItem>;
+    setNewItem: (item: Partial<CombinedInventoryItem>) => void;
     onAdd: () => void;
     adding: boolean;
     config: UserConfig | null;
-    existingItems: InventoryItem[];
+    existingItems: CombinedInventoryItem[];
 }
 
 export const AddItemModal = ({ show, onClose, newItem, setNewItem, onAdd, adding, config, existingItems }: AddItemModalProps) => {
@@ -137,7 +138,7 @@ export const AddItemModal = ({ show, onClose, newItem, setNewItem, onAdd, adding
                                         className="w-full bg-slate-900 border-2 border-slate-800 rounded-2xl h-12 px-4 text-white focus:outline-none focus:border-primary-500 transition-all text-sm font-bold appearance-none"
                                     >
                                         {config?.units?.map(u => (
-                                            <option key={u} value={u}>{u}</option>
+                                            <option key={u.name} value={u.name}>{u.name}</option>
                                         ))}
                                         {(!config?.units || config.units.length === 0) && (
                                             <option value="Numbers">Numbers</option>

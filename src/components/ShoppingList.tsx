@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { ClipboardList, CheckCircle2, ShoppingBag, User, Store, ChevronRight, PackageCheck, Trash2, Loader2, Eye, Info, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { googleApiService } from '../services/googleApiService';
-import type { ShoppingListItem, UserConfig, ShopEvent, PurchasedItem, InventoryItem } from '../types';
+import type { ShoppingListItem, UserConfig, ShopEvent, PurchasedBatch } from '../types';
+import { useInventory, type CombinedInventoryItem } from '../hooks/useInventory';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { clsx, type ClassValue } from 'clsx';
 import { getCurrencySymbol, convertCurrency, extractCode } from '../utils/currency';
 import { fetchAndCacheExchangeRates } from '../services/initService';
@@ -17,12 +19,20 @@ interface ShoppingListProps {
 }
 
 const ShoppingList = ({ config }: ShoppingListProps) => {
-    const [list, setList] = useState<ShoppingListItem[]>([]);
-    const [inventory, setInventory] = useState<InventoryItem[]>([]);
-    const [loading, setLoading] = useState(true);
+    const queryClient = useQueryClient();
     const [selectedItems, setSelectedItems] = useState<string[]>([]);
     const [showCheckout, setShowCheckout] = useState(false);
-    const [detailsItem, setDetailsItem] = useState<InventoryItem | null>(null);
+    const [detailsItem, setDetailsItem] = useState<CombinedInventoryItem | null>(null);
+
+    const { data: list = [], isLoading: loadingList } = useQuery({
+        queryKey: ['shoppingList'],
+        queryFn: googleApiService.getShoppingList,
+        enabled: !!config?.activeHouseholdId
+    });
+
+    const { data: inventory = [], isLoading: loadingInventory } = useInventory(config?.activeHouseholdId);
+
+    const loading = loadingList || loadingInventory;
 
     // Checkout Form State
     const [shop, setShop] = useState('');
@@ -53,44 +63,24 @@ const ShoppingList = ({ config }: ShoppingListProps) => {
         return () => { mounted = false; };
     }, [totalAmount, buyerPrefCurrency, config?.currency, isDifferentCurrency]);
 
-    useEffect(() => {
-        if (config?.activeHouseholdId) {
-            fetchData();
-        }
-    }, [config?.activeHouseholdId]);
+
 
     useEffect(() => {
         if (config?.shops?.[0]) setShop(config.shops[0].name);
         if (config?.members?.[0]) setBuyer(config.members[0].email);
     }, [config]);
 
-    const fetchData = async () => {
-        setLoading(true);
-        try {
-            const [shopData, invData] = await Promise.all([
-                googleApiService.getShoppingList(),
-                googleApiService.getInventory()
-            ]);
-            setList(shopData);
-            setInventory(invData);
-        } catch (e) {
-            console.error("Failed to fetch shopping list:", e);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const toggleItem = (itemName: string) => {
+    const toggleItem = (listId: string) => {
         setSelectedItems(prev =>
-            prev.includes(itemName)
-                ? prev.filter(i => i !== itemName)
-                : [...prev, itemName]
+            prev.includes(listId)
+                ? prev.filter(i => i !== listId)
+                : [...prev, listId]
         );
     };
 
     const handleUpdateQty = async (e: React.MouseEvent, item: ShoppingListItem, change: number) => {
         e.stopPropagation();
-        const invItem = inventory.find(i => i.itemName === item.itemName);
+        const invItem = inventory.find(i => i.itemId === item.itemId);
         const step = invItem?.stepQty || 1;
 
         let newQty = item.qtyNeeded + (change * step);
@@ -99,24 +89,31 @@ const ShoppingList = ({ config }: ShoppingListProps) => {
         if (newQty === item.qtyNeeded) return;
 
         // Optimistic update
-        setList(prev => prev.map(i => i.itemName === item.itemName ? { ...i, qtyNeeded: newQty } : i));
+        queryClient.setQueryData<ShoppingListItem[]>(['shoppingList'], old => {
+            if (!old) return old;
+            return old.map(i => i.listId === item.listId ? { ...i, qtyNeeded: newQty } : i);
+        });
 
         try {
-            await googleApiService.updateShoppingItem(item.itemName, newQty);
+            await googleApiService.updateShoppingItem(item.listId, newQty);
         } catch (err) {
             console.error("Failed to update quantity:", err);
-            fetchData(); // Revert on failure
+            queryClient.invalidateQueries({ queryKey: ['shoppingList'] });
         }
     };
 
-    const handleRemoveItem = async (e: React.MouseEvent, itemName: string) => {
+    const handleRemoveItem = async (e: React.MouseEvent, listId: string) => {
         e.stopPropagation();
-        setList(prev => prev.filter(i => i.itemName !== itemName));
-        setSelectedItems(prev => prev.filter(i => i !== itemName));
+        setSelectedItems(prev => prev.filter(i => i !== listId));
+        queryClient.setQueryData<ShoppingListItem[]>(['shoppingList'], old => {
+            if (!old) return old;
+            return old.filter(i => i.listId !== listId);
+        });
+
         try {
-            await googleApiService.removeShoppingItem(itemName);
+            await googleApiService.removeShoppingItem(listId);
         } catch (err) {
-            fetchData();
+            queryClient.invalidateQueries({ queryKey: ['shoppingList'] });
         }
     };
 
@@ -131,28 +128,53 @@ const ShoppingList = ({ config }: ShoppingListProps) => {
             shopSource: shop,
             totalAmount: finalAmount,
             buyer: buyer,
-            entryType: 'Summary'
+            eventType: 'NORMAL'
         };
 
-        const items: PurchasedItem[] = selectedItems.map(name => ({
-            eventId: event.eventId,
-            itemName: name,
-            qtyBought: list.find(l => l.itemName === name)?.qtyNeeded || 1,
-            pricePerUnit: 0
-        }));
+        const totalItemsCount = selectedItems.length;
+        const perItemApproxAmount = totalItemsCount > 0 ? (finalAmount / totalItemsCount) : 0;
+
+        const items: PurchasedBatch[] = selectedItems.map(listId => {
+            const lItem = list.find(l => l.listId === listId);
+            const qtyBought = lItem?.qtyNeeded || 1;
+            const totalPrice = perItemApproxAmount;
+            const pricePerUnit = Number((totalPrice / qtyBought).toFixed(2));
+
+            return {
+                eventId: event.eventId,
+                batchId: `BAT-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                itemId: lItem?.itemId || '',
+                qtyBought,
+                pricePerUnit,
+                totalPrice: Number(totalPrice.toFixed(2))
+            };
+        });
 
         try {
             await googleApiService.logPurchase(event, items);
 
-            // Remove items from shopping list
-            for (const name of selectedItems) {
-                await googleApiService.removeShoppingItem(name);
+            for (const listId of selectedItems) {
+                await googleApiService.removeShoppingItem(listId);
             }
+
+            const updateBatchPromises = items.map(b => googleApiService.updateInventoryBatch({
+                batchId: b.batchId,
+                itemId: b.itemId,
+                qtyAdded: b.qtyBought,
+                qtyRemaining: b.qtyBought,
+                pricePerUnit: b.pricePerUnit,
+                expiryDate: '',
+                addedDate: new Date().toISOString().split('T')[0],
+                status: 'STOCKED'
+            }));
+            await Promise.all(updateBatchPromises);
 
             setSelectedItems([]);
             setShowCheckout(false);
             setTotalAmount(0);
-            fetchData();
+            queryClient.invalidateQueries({ queryKey: ['shoppingList'] });
+            queryClient.invalidateQueries({ queryKey: ['inventory'] });
+            queryClient.invalidateQueries({ queryKey: ['shopEvents'] });
         } catch (e) {
             console.error("Checkout failed:", e);
             alert("Failed to complete purchase logging");
@@ -180,20 +202,21 @@ const ShoppingList = ({ config }: ShoppingListProps) => {
                     <div className="grid gap-3">
                         <AnimatePresence mode="popLayout">
                             {list.map((item, idx) => {
-                                const invItem = inventory.find(i => i.itemName === item.itemName);
+                                const invItem = inventory.find(i => i.itemId === item.itemId);
+                                const itemName = invItem?.itemName || 'Item ' + item.itemId;
                                 const step = invItem?.stepQty || 1;
 
                                 return (
                                     <motion.div
-                                        key={item.itemName}
+                                        key={item.listId}
                                         initial={{ opacity: 0, x: -20 }}
                                         animate={{ opacity: 1, x: 0 }}
                                         exit={{ opacity: 0, scale: 0.95 }}
                                         transition={{ delay: idx * 0.05 }}
-                                        onClick={() => toggleItem(item.itemName)}
+                                        onClick={() => toggleItem(item.listId)}
                                         className={cn(
                                             "glass p-4 rounded-[2rem] flex items-center justify-between group cursor-pointer transition-all duration-300 border-2",
-                                            selectedItems.includes(item.itemName)
+                                            selectedItems.includes(item.listId)
                                                 ? "border-primary-500/50 bg-primary-500/10 shadow-[0_0_20px_rgba(14,165,233,0.1)]"
                                                 : "border-slate-800/50"
                                         )}
@@ -201,15 +224,15 @@ const ShoppingList = ({ config }: ShoppingListProps) => {
                                         <div className="flex items-center gap-4">
                                             <div className={cn(
                                                 "w-11 h-11 rounded-2xl flex items-center justify-center transition-all",
-                                                selectedItems.includes(item.itemName)
+                                                selectedItems.includes(item.listId)
                                                     ? "bg-primary-600 text-white rotate-6 scale-110 shadow-lg shadow-primary-500/30"
                                                     : "bg-slate-800 text-slate-500 group-hover:bg-slate-700"
                                             )}>
-                                                {selectedItems.includes(item.itemName) ? <CheckCircle2 size={22} /> : <ClipboardList size={22} />}
+                                                {selectedItems.includes(item.listId) ? <CheckCircle2 size={22} /> : <ClipboardList size={22} />}
                                             </div>
                                             <div>
                                                 <h3 className="font-bold text-white text-base flex items-center gap-2">
-                                                    {item.itemName}
+                                                    {itemName}
                                                     {invItem && (
                                                         <button onClick={(e) => { e.stopPropagation(); setDetailsItem(invItem); }} className="text-slate-500 hover:text-primary-400">
                                                             <Eye size={16} />
@@ -238,13 +261,13 @@ const ShoppingList = ({ config }: ShoppingListProps) => {
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                            {selectedItems.includes(item.itemName) && (
+                                            {selectedItems.includes(item.listId) && (
                                                 <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}>
                                                     <PackageCheck className="text-primary-400" size={24} />
                                                 </motion.div>
                                             )}
                                             <button
-                                                onClick={(e) => handleRemoveItem(e, item.itemName)}
+                                                onClick={(e) => handleRemoveItem(e, item.listId)}
                                                 className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-colors"
                                                 title="Remove from Wish List"
                                             >

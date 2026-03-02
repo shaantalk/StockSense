@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'react';
 import { ShoppingBag, ChevronRight, ArrowUpRight, Loader2, AlertCircle, Clock } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useQuery } from '@tanstack/react-query';
 import { googleApiService } from '../services/googleApiService';
-import type { InventoryItem, ShoppingListItem, UserConfig } from '../types';
+import { useInventory, type CombinedInventoryItem } from '../hooks/useInventory';
+import { useDashboardAnalytics } from '../hooks/useAnalytics';
+import type { UserConfig } from '../types';
 import { Link, useNavigate } from 'react-router-dom';
 import { getCurrencySymbol } from '../utils/currency';
+import { PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area, Tooltip } from 'recharts';
 
 interface DashboardProps {
     config: UserConfig | null;
@@ -12,50 +16,49 @@ interface DashboardProps {
 
 const Dashboard = ({ config }: DashboardProps) => {
     const navigate = useNavigate();
-    const [inventory, setInventory] = useState<InventoryItem[]>([]);
-    const [shoppingList, setShoppingList] = useState<ShoppingListItem[]>([]);
     const [weeklySpend, setWeeklySpend] = useState(0);
-    const [loading, setLoading] = useState(true);
+    const { data: inventory = [], isLoading: isLoadingInventory } = useInventory(config?.activeHouseholdId);
+
+    const { data: shoppingList = [], isLoading: isLoadingShoppingList } = useQuery({
+        queryKey: ['shoppingList'],
+        queryFn: googleApiService.getShoppingList,
+        enabled: !!config?.activeHouseholdId
+    });
+
+    const { data: events = [], isLoading: isLoadingEvents } = useQuery({
+        queryKey: ['shopEvents'],
+        queryFn: googleApiService.getShopEvents,
+        enabled: !!config?.activeHouseholdId
+    });
 
     useEffect(() => {
-        const fetchData = async () => {
-            if (!config?.activeHouseholdId) {
-                setLoading(false);
-                return;
-            }
-            setLoading(true);
-            try {
-                const [inv, shop, events] = await Promise.all([
-                    googleApiService.getInventory(),
-                    googleApiService.getShoppingList(),
-                    googleApiService.getShopEvents()
-                ]);
-                setInventory(inv);
-                setShoppingList(shop);
-
-                // Calculate weekly spend (Sunday to Saturday or last 7 days)
-                const now = new Date();
-                const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-                const spend = events
-                    .filter(e => new Date(e.date) >= oneWeekAgo)
-                    .reduce((acc, curr) => acc + curr.totalAmount, 0);
-                setWeeklySpend(spend);
-
-            } catch (e) {
-                console.error("Dashboard fetch error:", e);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchData();
-    }, [config?.activeHouseholdId]);
+        if (!isLoadingEvents && events.length > 0) {
+            // Calculate weekly spend (Sunday to Saturday or last 7 days)
+            const now = new Date();
+            const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            const spend = events
+                .filter(e => new Date(e.date) >= oneWeekAgo)
+                .reduce((acc, curr) => acc + curr.totalAmount, 0);
+            setWeeklySpend(spend);
+        }
+    }, [events, isLoadingEvents]);
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const todayStr = `${today.getFullYear()}-${("0" + (today.getMonth() + 1)).slice(-2)}-${("0" + today.getDate()).slice(-2)}`;
 
-    const useNowCount = inventory.filter(i => i.status === 'Use now').length;
-    const expiredCount = inventory.filter(i => i.status === 'Expired' || (!!i.expiryDate && i.expiryDate < todayStr)).length;
+    const {
+        isLoading: isAnalyticsLoading,
+        totalMonthlySpend,
+        monthlySpendByMember,
+        totalMonthlyWastageValue,
+        wastageTrend
+    } = useDashboardAnalytics(config);
+
+    const useNowCount = inventory.filter((i: CombinedInventoryItem) => i.status === 'USE_NOW').length;
+    const expiredCount = inventory.filter((i: CombinedInventoryItem) => i.status === 'EXPIRED' || (!!i.expiryDate && i.expiryDate < todayStr)).length;
+
+    const loading = isLoadingInventory || isLoadingShoppingList || isLoadingEvents || isAnalyticsLoading;
 
     if (loading) {
         return (
@@ -107,7 +110,7 @@ const Dashboard = ({ config }: DashboardProps) => {
                     icon={Clock}
                     color="bg-orange-500/20 text-orange-400"
                     delay={0.2}
-                    onClick={() => navigate('/inventory?filter=Use now')}
+                    onClick={() => navigate('/inventory?filter=USE_NOW')}
                 />
                 <StatCard
                     title="Expired"
@@ -125,20 +128,20 @@ const Dashboard = ({ config }: DashboardProps) => {
                     <span className="flex h-2 w-2 rounded-full bg-red-500 animate-pulse" />
                 </h2>
                 <div className="grid gap-3">
-                    {inventory.filter(i => i.status === 'Use now' || i.status === 'Expired' || (!!i.expiryDate && i.expiryDate < todayStr)).slice(0, 4).map((item) => (
+                    {inventory.filter((i: CombinedInventoryItem) => i.status === 'USE_NOW' || i.status === 'EXPIRED' || (!!i.expiryDate && i.expiryDate < todayStr)).slice(0, 4).map((item: CombinedInventoryItem) => (
                         <Link
-                            key={item.itemName}
-                            to={`/inventory?filter=${item.status === 'Expired' || (!!item.expiryDate && item.expiryDate < todayStr) ? 'Expired' : 'Use now'}`}
+                            key={item.batchId}
+                            to={`/inventory?filter=${item.status === 'EXPIRED' || (!!item.expiryDate && item.expiryDate < todayStr) ? 'EXPIRED' : 'USE_NOW'}`}
                             className="glass p-4 rounded-2xl flex items-center justify-between group hover:border-orange-500/50 transition-colors border-slate-700/50"
                         >
                             <div className="flex items-center gap-3">
-                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${item.status === 'Expired' || (!!item.expiryDate && !!item.expiryDate && item.expiryDate < todayStr) ? 'bg-purple-500/10 text-purple-400' : 'bg-orange-500/10 text-orange-400'}`}>
-                                    {item.status === 'Expired' || (!!item.expiryDate && item.expiryDate < todayStr) ? <AlertCircle size={18} /> : <Clock size={18} />}
+                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${item.status === 'EXPIRED' || (!!item.expiryDate && !!item.expiryDate && item.expiryDate < todayStr) ? 'bg-purple-500/10 text-purple-400' : 'bg-orange-500/10 text-orange-400'}`}>
+                                    {item.status === 'EXPIRED' || (!!item.expiryDate && item.expiryDate < todayStr) ? <AlertCircle size={18} /> : <Clock size={18} />}
                                 </div>
                                 <div>
                                     <h3 className="text-sm font-bold text-white">{item.itemName}</h3>
                                     <p className="text-xs text-slate-400 font-medium">
-                                        {item.status === 'Expired' || (!!item.expiryDate && item.expiryDate < todayStr) ? <span className="text-purple-400">Expired</span> : <span className="text-orange-400">Use soon</span>}
+                                        {item.status === 'EXPIRED' || (!!item.expiryDate && item.expiryDate < todayStr) ? <span className="text-purple-400">Expired</span> : <span className="text-orange-400">Use soon</span>}
                                         {' '}• {item.currentQty} {item.unit} left
                                     </p>
                                 </div>
@@ -154,7 +157,7 @@ const Dashboard = ({ config }: DashboardProps) => {
                 </div>
             </section>
 
-            <section className="glass p-6 rounded-3xl bg-slate-900 border-slate-700 shadow-2xl relative overflow-hidden group">
+            <section onClick={() => navigate('/financials')} className="glass p-6 rounded-3xl bg-slate-900 border-slate-700 shadow-2xl relative overflow-hidden group cursor-pointer hover:border-slate-500 transition-colors">
                 <div className="relative z-10 flex flex-col gap-4">
                     <div className="flex items-center justify-between">
                         <h2 className="text-white font-bold text-lg">Household Expenses</h2>
@@ -180,6 +183,70 @@ const Dashboard = ({ config }: DashboardProps) => {
                 <div className="absolute top-0 right-0 w-32 h-32 bg-primary-600/10 rounded-full blur-3xl" />
                 <div className="absolute bottom-0 left-0 w-32 h-32 bg-accent-600/5 rounded-full blur-2xl" />
             </section>
+
+            {/* Analytics Section */}
+            {(monthlySpendByMember.length > 0 || wastageTrend.length > 0) && (
+                <section className="space-y-4">
+                    <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                        Monthly Overview
+                    </h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Spend by Member */}
+                        {monthlySpendByMember.length > 0 && (
+                            <div className="glass p-5 rounded-3xl border-slate-700/50">
+                                <h3 className="text-sm font-bold text-slate-300 mb-4 flex justify-between">
+                                    <span>Spend by Member</span>
+                                    <span className="text-white">{config?.currency} {totalMonthlySpend.toLocaleString()}</span>
+                                </h3>
+                                <div className="h-48">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <PieChart>
+                                            <Pie data={monthlySpendByMember} dataKey="amount" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={70} stroke="none">
+                                                {monthlySpendByMember.map((entry, index) => (
+                                                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                                                ))}
+                                            </Pie>
+                                            <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px' }} itemStyle={{ color: '#fff' }} />
+                                        </PieChart>
+                                    </ResponsiveContainer>
+                                </div>
+                                <div className="flex flex-wrap gap-2 mt-2">
+                                    {monthlySpendByMember.map(m => (
+                                        <div key={m.name} className="flex items-center gap-1.5 text-xs text-slate-400">
+                                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: m.fill }} />
+                                            {m.name}: {config?.currency} {m.amount.toLocaleString()}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Wastage Trend */}
+                        {wastageTrend.length > 0 && (
+                            <div className="glass p-5 rounded-3xl border-slate-700/50">
+                                <h3 className="text-sm font-bold text-slate-300 mb-4 flex justify-between">
+                                    <span>Wastage Trend (30 Days)</span>
+                                    <span className="text-red-400">{config?.currency} {totalMonthlyWastageValue.toLocaleString()}</span>
+                                </h3>
+                                <div className="h-48">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <AreaChart data={wastageTrend}>
+                                            <defs>
+                                                <linearGradient id="colorWastage" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3} />
+                                                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                                                </linearGradient>
+                                            </defs>
+                                            <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px' }} itemStyle={{ color: '#ef4444' }} />
+                                            <Area type="monotone" dataKey="amount" stroke="#ef4444" fillOpacity={1} fill="url(#colorWastage)" />
+                                        </AreaChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </section>
+            )}
         </div>
     );
 };
